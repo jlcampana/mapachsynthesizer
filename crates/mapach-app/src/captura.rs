@@ -57,6 +57,19 @@ impl Captura {
                 r(Menu(M::Modo)),
                 p(Chord(2)),
             ],
+            6 => vec![
+                p(Menu(M::Modo)),
+                p(Arrow(A::Right)),
+                r(Arrow(A::Right)),
+                p(Arrow(A::Right)),
+                r(Arrow(A::Right)),
+                r(Menu(M::Modo)),
+                p(Menu(M::Modo)),
+                r(Menu(M::Modo)),
+                p(Arrow(A::Down)),
+                p(Arrow(A::Down)),
+                p(Chord(3)),
+            ],
             _ => vec![],
         }
     }

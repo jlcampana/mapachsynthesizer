@@ -2,27 +2,54 @@
 //!
 //! No depende de `egui` ni de `cpal`, así que se prueba con tests normales.
 
-use mapach_engine::{Command, Param, SOUNDS};
+use mapach_engine::{ARP_PATTERNS, Command, Param, RATES, SOUNDS, STRUM_MS, Style};
 use mapach_input::{Arrow, Control, Event, Knob, Menu};
 use mapach_theory::{
     BUTTONS, Chord, Direction, Key, ModifierMode, Scale, VoicingOptions, voice_lead,
 };
 
-/// Modos de toque. De momento Tocar y Melodía; el resto llega en la fase 4.
+/// Modos de toque.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PlayMode {
     #[default]
     Tocar,
+    Rasgueo,
+    Arpegio,
+    Repetir,
+    Zumbido,
     Melodia,
 }
 
 impl PlayMode {
-    pub const ALL: [PlayMode; 2] = [PlayMode::Tocar, PlayMode::Melodia];
+    pub const ALL: [PlayMode; 6] = [
+        PlayMode::Tocar,
+        PlayMode::Rasgueo,
+        PlayMode::Arpegio,
+        PlayMode::Repetir,
+        PlayMode::Zumbido,
+        PlayMode::Melodia,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             PlayMode::Tocar => "Tocar",
+            PlayMode::Rasgueo => "Rasgueo",
+            PlayMode::Arpegio => "Arpegio",
+            PlayMode::Repetir => "Repetir",
+            PlayMode::Zumbido => "Zumbido",
             PlayMode::Melodia => "Melodía",
+        }
+    }
+
+    /// Texto e icono para la barra de arriba.
+    pub fn badge(self) -> &'static str {
+        match self {
+            PlayMode::Tocar => "▶ TOCAR",
+            PlayMode::Rasgueo => "🎸 RASGUEO",
+            PlayMode::Arpegio => "〰 ARPEGIO",
+            PlayMode::Repetir => "🔁 REPETIR",
+            PlayMode::Zumbido => "🐝 ZUMBIDO",
+            PlayMode::Melodia => "♪ MELODÍA",
         }
     }
 }
@@ -52,9 +79,13 @@ pub enum Item {
     Brillo,
     Modo,
     Tempo,
+    Patron,
+    Figura,
+    Velocidad,
 }
 
 impl Item {
+    /// Todas las opciones posibles de un menú (algunas solo salen en ciertos modos).
     pub fn of(menu: Menu) -> &'static [Item] {
         match menu {
             Menu::Tono => &[
@@ -66,7 +97,13 @@ impl Item {
                 Item::Nombres,
             ],
             Menu::Sonido => &[Item::Sonido, Item::Ataque, Item::Release, Item::Brillo],
-            Menu::Modo => &[Item::Modo, Item::Tempo],
+            Menu::Modo => &[
+                Item::Modo,
+                Item::Tempo,
+                Item::Patron,
+                Item::Figura,
+                Item::Velocidad,
+            ],
         }
     }
 
@@ -84,6 +121,9 @@ impl Item {
             Item::Brillo => "Brillo",
             Item::Modo => "Modo",
             Item::Tempo => "Tempo",
+            Item::Patron => "Patrón",
+            Item::Figura => "Figura",
+            Item::Velocidad => "Velocidad",
         }
     }
 }
@@ -95,11 +135,6 @@ pub struct OpenMenu {
     pub item: usize,
 }
 
-impl OpenMenu {
-    pub fn selected(&self) -> Item {
-        Item::of(self.menu)[self.item]
-    }
-}
 
 pub const BPM_MIN: f32 = 40.0;
 pub const BPM_MAX: f32 = 300.0;
@@ -119,6 +154,10 @@ pub struct State {
     /// Enseñar nombres de acordes y notas (por defecto no: solo colores).
     pub show_names: bool,
     pub play_mode: PlayMode,
+    pub arp_pattern: usize,
+    pub arp_rate: usize,
+    pub strum_speed: usize,
+    pub repeat_rate: usize,
     pub open_menu: Option<OpenMenu>,
     pub current: Option<Sounding>,
     /// Notas que suenan en modo Melodía (tecla → nota).
@@ -153,6 +192,10 @@ impl Default for State {
             bass: true,
             show_names: false,
             play_mode: PlayMode::Tocar,
+            arp_pattern: 0,
+            arp_rate: 3,
+            strum_speed: 1,
+            repeat_rate: 1,
             open_menu: None,
             current: None,
             melody: Vec::new(),
@@ -198,7 +241,48 @@ impl State {
             Command::SetParam(Param::Release(self.release)),
             Command::SetParam(Param::Brightness(self.brightness)),
             Command::SetParam(Param::Volume(self.effective_volume())),
+            Command::SetStyle(self.style()),
+            Command::SetBpm(self.bpm),
         ]
+    }
+
+    /// Modo de toque para el motor.
+    pub fn style(&self) -> Style {
+        match self.play_mode {
+            PlayMode::Tocar | PlayMode::Melodia => Style::Normal,
+            PlayMode::Rasgueo => Style::Strum {
+                speed: self.strum_speed as u8,
+            },
+            PlayMode::Arpegio => Style::Arp {
+                pattern: self.arp_pattern as u8,
+                rate: self.arp_rate as u8,
+            },
+            PlayMode::Repetir => Style::Repeat {
+                rate: self.repeat_rate as u8,
+            },
+            PlayMode::Zumbido => Style::Drone,
+        }
+    }
+
+    /// Opciones que se ven en la página de un menú (dependen del modo).
+    pub fn items(&self, menu: Menu) -> Vec<Item> {
+        Item::of(menu)
+            .iter()
+            .copied()
+            .filter(|i| match i {
+                Item::Patron => self.play_mode == PlayMode::Arpegio,
+                Item::Figura => matches!(self.play_mode, PlayMode::Arpegio | PlayMode::Repetir),
+                Item::Velocidad => self.play_mode == PlayMode::Rasgueo,
+                _ => true,
+            })
+            .collect()
+    }
+
+    /// Opción elegida en la página abierta.
+    pub fn selected_item(&self) -> Option<Item> {
+        let o = self.open_menu?;
+        let items = self.items(o.menu);
+        items.get(o.item.min(items.len().saturating_sub(1))).copied()
     }
 
     fn effective_volume(&self) -> f32 {
@@ -266,11 +350,6 @@ impl State {
             Control::Chord(b) | Control::ChordHigh(b) if (b as usize) < BUTTONS => {
                 let high = matches!(c, Control::ChordHigh(_));
                 match self.play_mode {
-                    PlayMode::Tocar => {
-                        self.held.retain(|&(x, h)| (x, h) != (b, high));
-                        self.held.push((b, high));
-                        self.play_chord(b, high, true, out);
-                    }
                     PlayMode::Melodia => {
                         let note = self.key.scale_note(b as i32) + if high { 12 } else { 0 };
                         self.melody.retain(|(x, _)| *x != c);
@@ -279,6 +358,11 @@ impl State {
                             note: note.clamp(0, 127) as u8,
                             velocity: 0.9,
                         });
+                    }
+                    _ => {
+                        self.held.retain(|&(x, h)| (x, h) != (b, high));
+                        self.held.push((b, high));
+                        self.play_chord(b, high, true, out);
                     }
                 }
             }
@@ -318,7 +402,17 @@ impl State {
                     self.open_menu = None;
                 }
             }
-            Control::KnobPress(Knob::Tempo) | Control::Tap => self.tap(now),
+            Control::KnobPress(Knob::Tempo) | Control::Tap => {
+                self.tap(now);
+                out.push(Command::SetBpm(self.bpm));
+            }
+            // De momento, Play para el zumbido (el looper llegará en la fase 7).
+            Control::Play => {
+                if self.play_mode == PlayMode::Zumbido && self.held.is_empty() {
+                    self.current = None;
+                    out.push(Command::StopChord);
+                }
+            }
             _ => {}
         }
     }
@@ -387,14 +481,22 @@ impl State {
             (Knob::Magica, Some(Menu::Sonido)) => self.change(Item::Sonido, d, out),
             (Knob::Magica, Some(Menu::Modo)) => self.change(Item::Modo, d, out),
             (Knob::Magica, None) => {
-                if let Some(open) = self.open_menu {
-                    self.change(open.selected(), d, out);
+                if let Some(item) = self.selected_item() {
+                    self.change(item, d, out);
                 } else if self.current.is_some() {
                     self.knob_color = wrap(self.knob_color, d, Direction::KNOB_CYCLE.len());
                     self.revoice(out);
                 }
             }
             (Knob::Tempo, Some(Menu::Tono)) => self.change(Item::Octava, d, out),
+            (Knob::Tempo, Some(Menu::Modo)) => {
+                let item = match self.play_mode {
+                    PlayMode::Arpegio => Item::Patron,
+                    PlayMode::Rasgueo => Item::Velocidad,
+                    _ => Item::Figura,
+                };
+                self.change(item, d, out);
+            }
             (Knob::Tempo, _) => self.change(Item::Tempo, d, out),
         }
     }
@@ -420,12 +522,19 @@ impl State {
     }
 
     fn navigate(&mut self, mut open: OpenMenu, a: Arrow, out: &mut Vec<Command>) {
-        let items = Item::of(open.menu);
+        let len = self.items(open.menu).len();
+        open.item = open.item.min(len - 1);
+        self.open_menu = Some(open);
         match a {
-            Arrow::Up => open.item = wrap(open.item, -1, items.len()),
-            Arrow::Down => open.item = wrap(open.item, 1, items.len()),
-            Arrow::Left => self.change(open.selected(), -1, out),
-            Arrow::Right => self.change(open.selected(), 1, out),
+            Arrow::Up => open.item = wrap(open.item, -1, len),
+            Arrow::Down => open.item = wrap(open.item, 1, len),
+            Arrow::Left | Arrow::Right => {
+                let d = if a == Arrow::Left { -1 } else { 1 };
+                if let Some(item) = self.selected_item() {
+                    self.change(item, d, out);
+                }
+                return;
+            }
         }
         self.open_menu = Some(open);
     }
@@ -481,20 +590,42 @@ impl State {
                 let i = PlayMode::ALL.iter().position(|&m| m == self.play_mode).unwrap_or(0);
                 self.set_play_mode(PlayMode::ALL[wrap(i, d, PlayMode::ALL.len())], out);
             }
-            Item::Tempo => self.bpm = (self.bpm + d as f32).clamp(BPM_MIN, BPM_MAX),
+            Item::Tempo => {
+                self.bpm = (self.bpm + d as f32).clamp(BPM_MIN, BPM_MAX);
+                out.push(Command::SetBpm(self.bpm));
+            }
+            Item::Patron => {
+                self.arp_pattern = wrap(self.arp_pattern, d, ARP_PATTERNS.len());
+                out.push(Command::SetStyle(self.style()));
+            }
+            Item::Figura => {
+                if self.play_mode == PlayMode::Repetir {
+                    self.repeat_rate = wrap(self.repeat_rate, d, RATES.len());
+                } else {
+                    self.arp_rate = wrap(self.arp_rate, d, RATES.len());
+                }
+                out.push(Command::SetStyle(self.style()));
+            }
+            Item::Velocidad => {
+                self.strum_speed = wrap(self.strum_speed, d, STRUM_MS.len());
+                out.push(Command::SetStyle(self.style()));
+            }
         }
     }
 
     fn set_play_mode(&mut self, m: PlayMode, out: &mut Vec<Command>) {
         if m != self.play_mode {
             self.play_mode = m;
-            self.stop_chord(out);
+            self.current = None;
+            self.knob_color = 0;
             self.held.clear();
+            out.push(Command::StopChord);
             for (_, n) in self.melody.drain(..) {
                 out.push(Command::NoteOff {
                     note: n.clamp(0, 127) as u8,
                 });
             }
+            out.push(Command::SetStyle(self.style()));
         }
     }
 
@@ -535,7 +666,11 @@ impl State {
             }
             Menu::Modo => {
                 let bpm = 70.0 + r(100) as f32;
+                let pat = r(ARP_PATTERNS.len());
                 self.bpm = bpm;
+                self.arp_pattern = pat;
+                out.push(Command::SetBpm(self.bpm));
+                out.push(Command::SetStyle(self.style()));
             }
         }
     }
@@ -564,20 +699,8 @@ impl State {
         };
         let v = voice_lead(&self.last_upper, chord, opts);
         let notes: Vec<i32> = v.notes().into_iter().map(|n| n.clamp(0, 127)).collect();
-        let old = self.current.take().map(|s| s.notes).unwrap_or_default();
-        for &n in &old {
-            if retrigger || !notes.contains(&n) {
-                out.push(Command::NoteOff { note: n as u8 });
-            }
-        }
-        for &n in &notes {
-            if retrigger || !old.contains(&n) {
-                out.push(Command::NoteOn {
-                    note: n as u8,
-                    velocity: 0.85,
-                });
-            }
-        }
+        self.current.take();
+        out.push(Command::chord(&v.upper, v.bass, 0.85, retrigger));
         self.last_upper = v.upper;
         self.current = Some(Sounding {
             button,
@@ -599,11 +722,13 @@ impl State {
         }
     }
 
+    /// Se suelta el acorde. En Zumbido sigue sonando (y se sigue viendo).
     fn stop_chord(&mut self, out: &mut Vec<Command>) {
-        if let Some(s) = self.current.take() {
-            for n in s.notes {
-                out.push(Command::NoteOff { note: n as u8 });
-            }
+        if self.current.is_some() {
+            out.push(Command::ChordOff);
+        }
+        if self.play_mode != PlayMode::Zumbido {
+            self.current = None;
         }
         self.knob_color = 0;
     }
@@ -633,6 +758,19 @@ mod tests {
             })
             .collect()
     }
+    /// (notas, bajo, retrigger) del ChordOn.
+    fn chord(cmds: &[Command]) -> Option<(Vec<u8>, Option<u8>, bool)> {
+        cmds.iter().find_map(|c| match *c {
+            Command::ChordOn {
+                notes,
+                len,
+                bass,
+                retrigger,
+                ..
+            } => Some((notes[..len as usize].to_vec(), bass, retrigger)),
+            _ => None,
+        })
+    }
     fn offs(cmds: &[Command]) -> Vec<u8> {
         cmds.iter()
             .filter_map(|c| match c {
@@ -646,9 +784,9 @@ mod tests {
     fn tocar_y_soltar_un_acorde() {
         let mut s = State::default();
         let c = press(&mut s, Control::Chord(0));
-        assert_eq!(ons(&c), [36, 48, 52, 55]);
+        assert_eq!(chord(&c), Some((vec![48, 52, 55], Some(36), true)));
         let c = release(&mut s, Control::Chord(0));
-        assert_eq!(offs(&c), [36, 48, 52, 55]);
+        assert_eq!(c, [Command::ChordOff]);
         assert!(s.current.is_none());
     }
 
@@ -658,11 +796,10 @@ mod tests {
         press(&mut s, Control::Chord(0));
         let c = press(&mut s, Control::Arrow(Arrow::Up)); // Do → Dom
         assert_eq!(s.current.as_ref().unwrap().chord.kind, ChordType::Minor);
-        assert_eq!(offs(&c), [52]);
-        assert_eq!(ons(&c), [51]);
+        assert_eq!(chord(&c), Some((vec![48, 51, 55], Some(36), false)));
         let c = release(&mut s, Control::Arrow(Arrow::Up));
         assert_eq!(s.current.as_ref().unwrap().chord.kind, ChordType::Major);
-        assert_eq!(ons(&c), [52]);
+        assert_eq!(chord(&c), Some((vec![48, 52, 55], Some(36), false)));
     }
 
     #[test]
@@ -713,8 +850,9 @@ mod tests {
         assert!(matches!(c[0], Command::SetPatch(_)));
         // Abajo: siguiente opción.
         press(&mut s, Control::Arrow(Arrow::Down));
-        assert_eq!(s.open_menu.unwrap().selected(), Item::Ataque);
+        assert_eq!(s.selected_item(), Some(Item::Ataque));
         // Volver a pulsar el menú lo cierra.
+        let _ = s.selected_item();
         press(&mut s, Control::Menu(Menu::Sonido));
         release(&mut s, Control::Menu(Menu::Sonido));
         assert!(s.open_menu.is_none());
@@ -773,7 +911,7 @@ mod tests {
     #[test]
     fn modo_melodia_toca_notas_de_la_escala() {
         let mut s = State::default();
-        s.change(Item::Modo, 1, &mut Vec::new());
+        s.change(Item::Modo, -1, &mut Vec::new());
         assert_eq!(s.play_mode, PlayMode::Melodia);
         let c = press(&mut s, Control::Chord(2));
         assert_eq!(ons(&c), [64]);
@@ -806,6 +944,33 @@ mod tests {
         s.change(Item::Tonalidad, 2, &mut out);
         let root = s.current.as_ref().unwrap().chord.root;
         assert_eq!(root.rem_euclid(12), 2);
-        assert!(!ons(&out).is_empty());
+        assert!(chord(&out).is_some());
+    }
+
+    #[test]
+    fn modos_de_toque_mandan_su_estilo() {
+        let mut s = State::default();
+        let mut out = Vec::new();
+        s.change(Item::Modo, 2, &mut out);
+        assert_eq!(s.play_mode, PlayMode::Arpegio);
+        assert!(out.contains(&Command::SetStyle(Style::Arp { pattern: 0, rate: 3 })));
+        // El menú rojo enseña Patrón y Figura solo en Arpegio.
+        assert!(s.items(Menu::Modo).contains(&Item::Patron));
+        s.change(Item::Modo, 1, &mut out);
+        assert!(!s.items(Menu::Modo).contains(&Item::Patron));
+        assert!(s.items(Menu::Modo).contains(&Item::Figura));
+    }
+
+    #[test]
+    fn zumbido_sigue_al_soltar_y_play_lo_para() {
+        let mut s = State::default();
+        s.change(Item::Modo, 4, &mut Vec::new());
+        assert_eq!(s.play_mode, PlayMode::Zumbido);
+        press(&mut s, Control::Chord(0));
+        release(&mut s, Control::Chord(0));
+        assert!(s.current.is_some());
+        let c = press(&mut s, Control::Play);
+        assert_eq!(c, [Command::StopChord]);
+        assert!(s.current.is_none());
     }
 }

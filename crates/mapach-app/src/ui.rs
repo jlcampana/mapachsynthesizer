@@ -5,7 +5,7 @@
 use std::f32::consts::TAU;
 
 use eframe::egui::{Align2, Color32, FontId, Painter, Pos2, Rect, Stroke, StrokeKind, Vec2};
-use mapach_engine::{SOUNDS, midi_to_freq};
+use mapach_engine::{ARP_PATTERNS, RATES, SOUNDS, STRUM_MS, midi_to_freq};
 use mapach_input::{Arrow, Menu};
 use mapach_theory::{Direction, ModifierMode, NOTE_NAMES};
 
@@ -126,11 +126,7 @@ fn pill(c: &Canvas, x: f32, w: f32, fill: Color32, text: &str, tc: Color32) {
 }
 
 fn top_bar(c: &Canvas, st: &State) {
-    let modo = match st.play_mode {
-        PlayMode::Tocar => "▶ TOCAR",
-        PlayMode::Melodia => "♪ MELODÍA",
-    };
-    pill(c, 36.0, 150.0, MENU_ROJO, modo, BLANCO);
+    pill(c, 36.0, 150.0, MENU_ROJO, st.play_mode.badge(), BLANCO);
 
     let oct = format!("{:+}", st.key.octave).replace("+0", "0");
     let tono = if st.show_names {
@@ -251,7 +247,7 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
 fn scope(c: &Canvas, st: &State, extra: &Extra) {
     let notes: Vec<i32> = match st.play_mode {
         PlayMode::Melodia => st.melody.iter().map(|&(_, n)| n).collect(),
-        PlayMode::Tocar => st.current.as_ref().map(|s| s.notes.clone()).unwrap_or_default(),
+        _ => st.current.as_ref().map(|s| s.notes.clone()).unwrap_or_default(),
     };
     let amp = (extra.peak * 4.0).clamp(0.0, 1.0);
     let x0 = 176.0;
@@ -283,7 +279,7 @@ fn scope(c: &Canvas, st: &State, extra: &Extra) {
 fn mini_piano(c: &Canvas, st: &State) {
     let notes: Vec<i32> = match st.play_mode {
         PlayMode::Melodia => st.melody.iter().map(|&(_, n)| n).collect(),
-        PlayMode::Tocar => st.current.as_ref().map(|s| s.notes.clone()).unwrap_or_default(),
+        _ => st.current.as_ref().map(|s| s.notes.clone()).unwrap_or_default(),
     };
     let col = st
         .current
@@ -370,7 +366,8 @@ fn menu_page(c: &Canvas, st: &State, m: Menu, sel: Option<usize>) {
         return;
     }
     let sel = sel.unwrap_or(0);
-    let items = Item::of(m);
+    let items = st.items(m);
+    let sel = sel.min(items.len().saturating_sub(1));
     for (i, &item) in items.iter().enumerate() {
         let y = 156.0 + i as f32 * 28.0;
         let on = i == sel;
@@ -409,6 +406,10 @@ fn value_text(st: &State, item: Item) -> String {
         Item::Brillo => format!("{:.0} %", st.brightness * 100.0),
         Item::Modo => st.play_mode.name().to_string(),
         Item::Tempo => format!("{:.0} BPM", st.bpm),
+        Item::Patron => ARP_PATTERNS[st.arp_pattern].0.to_string(),
+        Item::Figura if st.play_mode == PlayMode::Repetir => RATES[st.repeat_rate].0.to_string(),
+        Item::Figura => RATES[st.arp_rate].0.to_string(),
+        Item::Velocidad => STRUM_MS[st.strum_speed].0.to_string(),
     }
 }
 
