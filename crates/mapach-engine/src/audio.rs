@@ -29,6 +29,8 @@ pub struct AudioStats {
     pub peak_bits: AtomicU32,
     /// Voces sonando.
     pub voices: AtomicU32,
+    /// Paso de la caja de ritmos + 1 (0 = parada).
+    pub drum_step: AtomicU32,
 }
 
 /// Una salida de audio en marcha. Mientras exista, suena.
@@ -56,6 +58,14 @@ impl AudioOutput {
     /// Pico de salida del último bloque (lineal).
     pub fn peak(&self) -> f32 {
         f32::from_bits(self.stats.peak_bits.load(Ordering::Relaxed))
+    }
+
+    /// Paso de la caja de ritmos que suena.
+    pub fn drum_step(&self) -> Option<usize> {
+        match self.stats.drum_step.load(Ordering::Relaxed) {
+            0 => None,
+            n => Some(n as usize - 1),
+        }
     }
 
     /// Voces sonando.
@@ -182,6 +192,10 @@ where
                 }
             }
             stats_cb.peak_bits.store(peak.to_bits(), Ordering::Relaxed);
+            stats_cb.drum_step.store(
+                engine.drum_step().map_or(0, |s| s as u32 + 1),
+                Ordering::Relaxed,
+            );
             stats_cb
                 .voices
                 .store(engine.active_voices() as u32, Ordering::Relaxed);

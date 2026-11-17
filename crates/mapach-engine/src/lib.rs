@@ -5,6 +5,7 @@
 //! sonido. El módulo [`audio`] lo conecta a la salida real.
 
 pub mod audio;
+pub mod drums;
 mod patch;
 pub mod performer;
 mod voice;
@@ -12,6 +13,7 @@ mod voice;
 pub use patch::{Patch, SOUNDS, Sound};
 pub use performer::{ARP_PATTERNS, MAX_CHORD, RATES, STRUM_MS, Style};
 
+use drums::{DrumMachine, Pattern};
 use performer::{Out, Performer};
 
 use mapach_dsp::{AdsrParams, Limiter, Smoothed, db_to_gain};
@@ -64,6 +66,15 @@ pub enum Command {
     StopChord,
     SetStyle(Style),
     SetBpm(f32),
+    /// Golpe de batería en directo (instrumento 0–6).
+    DrumHit {
+        drum: u8,
+        velocity: f32,
+    },
+    SetKit(u8),
+    SetPattern(Pattern),
+    /// Arranca o para la caja de ritmos.
+    DrumsPlay(bool),
 }
 
 impl Command {
@@ -132,6 +143,8 @@ pub struct Engine {
     volume: Smoothed,
     limiter: Limiter,
     performer: Performer,
+    drums: DrumMachine,
+    bpm: f32,
     /// Contador para saber qué voz es la más vieja.
     clock: u64,
     peak: f32,
@@ -149,6 +162,8 @@ impl Engine {
             volume: Smoothed::new(0.7, 0.02, sample_rate),
             limiter: Limiter::new(db_to_gain(DEFAULT_MAX_DB), 0.15, sample_rate),
             performer: Performer::new(sample_rate),
+            drums: DrumMachine::new(sample_rate),
+            bpm: 120.0,
             clock: 0,
             peak: 0.0,
         }
@@ -211,7 +226,14 @@ impl Engine {
                 self.performer.set_style(st, &mut |o| ob.push(o));
                 self.apply(&ob);
             }
-            Command::SetBpm(b) => self.performer.set_bpm(b),
+            Command::SetBpm(b) => {
+                self.bpm = b.clamp(20.0, 400.0);
+                self.performer.set_bpm(self.bpm);
+            }
+            Command::DrumHit { drum, velocity } => self.drums.hit(drum as usize, velocity),
+            Command::SetKit(k) => self.drums.set_kit(k as usize),
+            Command::SetPattern(p) => self.drums.set_pattern(p),
+            Command::DrumsPlay(on) => self.drums.set_playing(on),
             Command::SetPatch(p) => {
                 self.patch = p;
                 self.env = p.env;
@@ -269,6 +291,11 @@ impl Engine {
         self.voices[idx].start(note, velocity.clamp(0.0, 1.0), pan, self.clock, &self.patch);
     }
 
+    /// Paso de la caja de ritmos que suena, si está en marcha.
+    pub fn drum_step(&self) -> Option<usize> {
+        self.drums.step()
+    }
+
     /// Número de voces que están sonando.
     pub fn active_voices(&self) -> usize {
         self.voices.iter().filter(|v| v.is_active()).count()
@@ -295,6 +322,7 @@ impl Engine {
             for v in self.voices.iter_mut().filter(|v| v.is_active()) {
                 v.render(block, &self.patch, &self.env, cutoff, self.sample_rate);
             }
+            self.drums.render(block, self.bpm);
             start += n;
         }
 
@@ -420,6 +448,23 @@ mod tests {
         e.handle(Command::ChordOff);
         render(&mut e, 3.0);
         assert_eq!(e.active_voices(), 0);
+    }
+
+    #[test]
+    fn ritmo_suena_y_no_pasa_del_techo() {
+        let mut e = Engine::new(48_000.0);
+        e.handle(Command::SetParam(Param::Volume(1.0)));
+        e.handle(Command::SetPattern(drums::rhythm(2, 6)));
+        e.handle(Command::DrumsPlay(true));
+        for n in 0..12u8 {
+            e.handle(on(40 + n * 3));
+        }
+        let buf = render(&mut e, 2.0);
+        assert!(e.drum_step().is_some());
+        let c = db_to_gain(DEFAULT_MAX_DB);
+        assert!(buf.iter().all(|s| s.abs() <= c + 1e-6));
+        e.handle(Command::DrumsPlay(false));
+        assert!(e.drum_step().is_none());
     }
 
     #[test]
