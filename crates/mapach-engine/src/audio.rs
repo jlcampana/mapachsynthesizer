@@ -25,6 +25,10 @@ pub struct AudioStats {
     pub block_frames: AtomicU32,
     /// Latencia de salida estimada por `cpal`, en microsegundos.
     pub output_latency_us: AtomicU32,
+    /// Pico de salida del último bloque (bits de un `f32`).
+    pub peak_bits: AtomicU32,
+    /// Voces sonando.
+    pub voices: AtomicU32,
 }
 
 /// Una salida de audio en marcha. Mientras exista, suena.
@@ -47,6 +51,16 @@ impl AudioOutput {
     /// Latencia de salida estimada en milisegundos.
     pub fn latency_ms(&self) -> f32 {
         self.stats.output_latency_us.load(Ordering::Relaxed) as f32 / 1000.0
+    }
+
+    /// Pico de salida del último bloque (lineal).
+    pub fn peak(&self) -> f32 {
+        f32::from_bits(self.stats.peak_bits.load(Ordering::Relaxed))
+    }
+
+    /// Voces sonando.
+    pub fn voices(&self) -> u32 {
+        self.stats.voices.load(Ordering::Relaxed)
     }
 
     /// Frames del último bloque procesado.
@@ -142,10 +156,12 @@ where
                 .output_latency_us
                 .store(lat.as_micros() as u32, Ordering::Relaxed);
 
+            let mut peak = 0.0f32;
             for chunk_out in data.chunks_mut(MAX_BLOCK * channels) {
                 let n = chunk_out.len() / channels;
                 let stereo = &mut scratch[..n * 2];
                 engine.process(stereo);
+                peak = peak.max(engine.peak());
                 for (frame, s) in chunk_out.chunks_exact_mut(channels).zip(stereo.chunks_exact(2)) {
                     for (c, out) in frame.iter_mut().enumerate() {
                         let v = if c % 2 == 0 { s[0] } else { s[1] };
@@ -153,8 +169,12 @@ where
                     }
                 }
             }
+            stats_cb.peak_bits.store(peak.to_bits(), Ordering::Relaxed);
+            stats_cb
+                .voices
+                .store(engine.active_voices() as u32, Ordering::Relaxed);
         },
-        |err| eprintln!("Error de audio: {err}"),
+        |err| eprintln!("Aviso de audio: {err}"),
         None,
     )?;
     Ok((stream, producer, stats))

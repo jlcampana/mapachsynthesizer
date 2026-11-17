@@ -65,7 +65,7 @@ impl eframe::App for App {
                 match key {
                     egui::Key::A if pressed => {
                         self.sonando = true;
-                        self.send(Command::NoteOn { note: 69 });
+                        self.send(Command::NoteOn { note: 69, velocity: 1.0 });
                     }
                     egui::Key::A => {
                         self.sonando = false;
