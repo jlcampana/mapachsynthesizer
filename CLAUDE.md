@@ -8,7 +8,7 @@ Sintetizador para niños en Rust, para Linux. Ver [README.md](README.md) y [docs
   funciona, un test que pasa, una sección de documentación terminada, un fichero de configuración
   probado… Mejor muchos commits pequeños que uno grande al final.
   - Cada commit debe dejar el proyecto en un estado que compila y pasa los tests.
-  - Hacer push sigue necesitando permiso.
+  - Después de cada commit, haz push a GitHub (`origin main`) sin pedir permiso.
 - Mensajes de commit en español, con prefijo de tipo: `feat:`, `fix:`, `docs:`, `test:`,
   `refactor:`, `chore:`. Primera línea corta; en el cuerpo, el porqué.
 - La documentación y los textos de la interfaz, en español.
