@@ -1861,11 +1861,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mapach-dsp"
+version = "0.1.0"
+
+[[package]]
 name = "mapach-engine"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "cpal",
+ "mapach-dsp",
  "rtrb",
 ]
 
