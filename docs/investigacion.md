@@ -1,6 +1,6 @@
 # Investigación
 
-Fecha: 2026-11-06
+Fecha: 2026-11-06 (sección 6: 2026-11-17)
 
 Este documento recoge lo que hacen los dos dispositivos de referencia y qué partes nos
 interesan para un sintetizador de escritorio en Rust, pensado para un niño y controlado con
@@ -146,3 +146,163 @@ software solo para Windows.
 
 Alternativa a los encoders: llamar a `ffmpeg` si está instalado. Lo dejamos como plan B porque
 añade una dependencia externa.
+
+---
+
+## 6. Firmwares de la comunidad del FM-1
+
+Fecha: 2026-11-17. Enlaces de partida en [FUENTES.md](../FUENTES.md).
+
+Desde que M-VAVE abrió el firmware del FM-1, la comunidad ha publicado decenas de firmwares
+alternativos ([The Firmware Hub](https://thefirmwarehub.com/) lista más de 30). Casi todos parten de
+[Felucca](https://github.com/hugelton/Felucca) y son **GPL-3.0**. Dos están muy cerca de lo que
+queremos hacer: **fm1-chord**, que convierte el FM-1 en un HiChord, y **Rainbow mode**, un juguete
+musical para niños pequeños.
+
+> **Licencias:** si copiamos código de estos proyectos, Chispa tendría que ser GPL-3.0. Las tablas
+> musicales (escalas, intervalos, qué hace cada dirección) son datos que podemos reescribir en Rust.
+> fm1-chord avisa de que el fabricante del HiChord dice tener una **patente en trámite** sobre la
+> asignación de acordes. Para un proyecto privado no importa. Si algún día publicamos Chispa,
+> conviene usar nombres propios y citar los precedentes: Omnichord, Suzuki QChord y Casio Chordana.
+
+### 6.1 fm1-chord: un HiChord dentro del FM-1
+
+Fuente: [math0ne/fm1-chord](https://github.com/math0ne/fm1-chord) (GPL-3.0). Lo más útil está en
+`spec/docs/02-chord-machine-reference.md` y `spec/docs/04-chord-engine-tables.md`.
+
+Es una reimplementación del HiChord hecha solo a partir de manuales públicos y del protocolo de su
+app. Trae las **tablas completas del motor de acordes**, y eso es justo lo que necesitamos para la
+fase 1 de Chispa:
+
+- **10 escalas** con sus grados, y el acorde por defecto de cada tecla en cada escala. En la mayor:
+  I mayor, ii menor, iii menor, IV mayor, V mayor, vi menor y vii disminuido. Con las pentatónicas
+  y la de blues, las teclas siguen las notas de la escala y pasan a la octava siguiente cuando se
+  acaban.
+- **29 tipos de acorde** con sus intervalos: mayor, menor, 7ª, maj7, 9ª, sus2, sus4, 6ª, add9,
+  disminuido, aumentado, m7♭5, 13ª…
+- **Modificadores: qué hace cada flecha**, en 4 tablas. La tabla básica depende de si el acorde
+  es mayor o menor:
+
+  | Flecha | Acorde mayor | Acorde menor | Disminuido (vii) |
+  |---|---|---|---|
+  | ↑ | menor | mayor | menor |
+  | ↗ | 7ª dominante | 7ª dominante | 7ª dominante |
+  | → | maj7 | m7 | m7♭5 |
+  | ↘ | maj9 | m9 | m7♭5 |
+  | ↓ | sus4 | sus4 | sus4 |
+  | ↙ | 6ª | sus2 | sus2 |
+  | ← | disminuido | disminuido | menor |
+  | ↖ | aumentado | aumentado | aumentado |
+
+  Las otras tablas son *Extended*, *Chromatic* (←/→ sube o baja la tonalidad un semitono) y
+  *Borrow*: dominante secundaria, sustituto tritonal, napolitano, acordes paralelos…
+- **Voicing en 6 voces:** raíz, 3ª, 5ª, bajo (dos octavas abajo) y dos extensiones. Si están
+  activadas, cada voz lleva una copia desafinada de 5 a 15 cents y panoramizada al lado contrario,
+  para dar un sonido estéreo ancho.
+- **Inversiones** (posición fundamental, 1ª y 2ª) y un **algoritmo de voice leading** sencillo:
+  prueba 3 inversiones × 3 octavas y se queda con la que mueve menos las notas respecto al acorde
+  anterior.
+- **Arpegios** como patrones de 8 pasos que se refieren a "raíz, 3ª, 5ª, 7ª" y no a notas
+  concretas, así que funcionan con cualquier acorde. Ritmos: de 1/1 a 1/32, tresillos y swing.
+- **Rasgueo:** 200, 80 o 40 ms entre nota y nota.
+- **7 envolventes predefinidas** (LONG, SHORT, SWELL, PLUCK, TOUCH, SUSTAIN, KEYS), con sus valores
+  ADSR en milisegundos.
+- **Batería:** cada ritmo es un patrón de 16 pasos, con un bit por instrumento (bombo, caja,
+  charles, tom, charles abierto, platillo). Hay 7 estilos × 8 variaciones.
+
+Ideas suyas que no teníamos:
+
+- **Acorde con bajo distinto** (*slash chord*): la primera tecla que se mantiene da el bajo y la
+  segunda el acorde (Em/C).
+- **Arpa de rasgueo** al estilo Omnichord: unas teclas tocan una a una las notas del último acorde,
+  y al pasar el dedo por encima se rasguea.
+- **En reposo, la pantalla muestra qué hace cada tecla.**
+
+### 6.2 Rainbow mode: un juguete musical para niños pequeños
+
+Fuente: [joshbartlettband-web/felucca-rainbow](https://github.com/joshbartlettband-web/felucca-rainbow)
+(GPL-3.0). Todo el diseño está explicado en `RAINBOW.md`, y el código en `firmware/src/kid.c`.
+
+Está diseñado para niños que todavía no leen, y de él hay mucho que aprender:
+
+- **Las perillas dicen lo que hacen con imágenes:** *día → noche* (el sonido se oscurece y sale la
+  luna), *eco* y *meneo* (vibrato).
+- **Efectos de un toque, con nombre gracioso:** HIPO (tartamudeo), AL REVÉS, DORMIDO (el sonido se
+  frena como un tocadiscos), CHILLÓN (una octava arriba), GIGANTE (una octava abajo) y CONGELAR.
+  Se activan y se desactivan con la misma tecla, y vuelven a empezar con cada nota.
+- **Modos de juego:**
+  - *ADIVINA:* suena una nota y hay que encontrarla. Empieza con Do y Sol y va añadiendo notas.
+  - *SIGUE:* se ilumina la tecla de la siguiente nota de una canción infantil. El niño va a su ritmo
+    y si se equivoca no pasa nada.
+  - *ACORDES:* lecciones de 4 acordes.
+  - *CÓPIAME:* un juego de memoria tipo Simón.
+  - *ESCRIBE:* un pentagrama para componer al estilo del Mario Paint.
+- **Estrellas y secretos:** cada juego ganado da una estrella. Con 10, 25 y 50 estrellas se
+  desbloquean sorpresas secretas.
+- **Pentagrama en directo:** las notas que se tocan aparecen escritas con su color, y su duración
+  se ve crecer mientras se mantiene la tecla.
+- **Colores de las notas**, los de los tubos y campanas de las clases de música: Do rojo, Re
+  naranja, Mi amarillo, Fa verde, Sol turquesa, La morado, Si rosa. Los sostenidos llevan el color
+  intermedio.
+- **Seguridad del volumen:**
+  - El adulto fija el volumen máximo en 8 pasos de unos 3 dB.
+  - Un **limitador** sigue a ese máximo, para que ningún efecto suba el volumen por encima de lo
+    que ya se oía.
+  - Los agudos se suavizan unos 4 dB por encima de unos 3,3 kHz, que es la zona que molesta en
+    altavoces pequeños y auriculares.
+- **Volumen igualado de oído:** midieron la sonoridad percibida de cada sonido con el método de
+  radiodifusión (ITU-R BS.1770, ponderación K) y la ajustaron. Pasaron de 12 dB de diferencia entre
+  sonidos a unos 3,5. Un acorde suena tan fuerte como una nota sola.
+- **Ajustes de adulto escondidos:** se mantiene una tecla 1 s y se gira una perilla. Así se
+  cambian el volumen máximo, el nombre del niño en el saludo, si las notas se llaman Do-Re-Mi o
+  C-D-E, y si se ve el pentagrama.
+- **Saludo con el nombre del niño** al encender, con letras de arcoíris y confeti.
+- **Nunca sobrescribe el trabajo de los adultos:** el modo niño tiene su propio guardado.
+
+### 6.3 Otros enlaces
+
+- **[fm1-emu](https://github.com/joakimeriksson/fm1-emu)** (MIT): un emulador del FM-1 escrito en
+  **Rust**, que corre en el navegador (WebAssembly), como plugin (VST3/CLAP) y como app de
+  escritorio. Es buena referencia para el audio en tiempo real en Rust. Usa el teclado del
+  ordenador como piano: dos filas de teclas para las notas, Z/X para la octava y espacio para Play.
+- **[fm1-dock](https://github.com/joakimeriksson/fm1-dock)** (GPL-3.0): varios motores de sonido
+  intercambiables, con ajustes comunes como la ecualización y el MIDI. Si un motor falla varias
+  veces o va lento, se salta. Es buena idea para que un sonido roto no tumbe toda la app.
+- **[FM1-Animatek](https://github.com/animatek/FM1-Animatek)** (GPL-3.0): el firmware ATEK303 con el
+  motor **Open303**, un sonido "ácido" tipo Roland TB-303. Lleva hoja de trucos y demo en el
+  navegador.
+- **[fm1_open](https://github.com/m-vave/fm1_open)** (oficial): el motor de sonido viene compilado
+  y no se puede reutilizar. Tiene una idea buena: **grabar por pasos**, donde cada acorde que
+  sueltas avanza un paso.
+- **[The Firmware Hub](https://thefirmwarehub.com/):** otros firmwares que dan ideas:
+  - *FoMni*, un arpa de acordes.
+  - *Polly*, una banda que sigue tus acordes.
+  - *X0X*, cajas de ritmos 808 y 909.
+  - *ETCH*, para dibujar tu propia forma de onda. Encajaría con los niños.
+  - *Fart Machine One*, que hace exactamente lo que dice su nombre. Seguramente sería el más
+    popular entre los niños.
+
+### 6.4 Qué podríamos llevar a Chispa
+
+**Ya, en la fase 1**, de fm1-chord:
+
+1. **Usar sus tablas como especificación** del motor de acordes: escalas, tipos de acorde, las 4
+   tablas de flechas, voicing, inversiones y voice leading. Las reescribimos en Rust con tests.
+   Así nos ahorramos adivinar cómo se comporta el HiChord.
+2. **Pantalla en reposo con la leyenda de las teclas**: qué hace cada una cuando no se está tocando.
+
+**Al final, en la fase 10 (Pulido)**, las ideas de Rainbow mode:
+
+3. **Colores por nota** (Do rojo, Re naranja, Mi amarillo, Fa verde, Sol turquesa, La morado,
+   Si rosa) en vez del arcoíris por grados, para que el color de cada nota sea siempre el mismo.
+   En Do mayor los dos sistemas casi coinciden, porque I–vii caen en Do–Si. Solo cambian al
+   cambiar de tonalidad: en Sol mayor, la tecla I sería turquesa.
+4. **Seguridad del volumen**: volumen máximo para el adulto, un limitador que lo siga, agudos
+   suavizados y los sonidos igualados por sonoridad, con un test que lo compruebe. El limitador
+   fijo de la fase 5 ya cubre lo básico hasta entonces.
+5. **Efectos de un toque con nombre de niño**: hipo, al revés, dormido, chillón, gigante y congelar.
+6. **Juegos**: *Sigue la canción* y *Cópiame*, que son más sencillos que el *Chord Hiro*, y
+   estrellas que desbloquean cosas.
+7. **Una tarjeta corta que el adulto pueda leer en voz alta** al cambiar de modo.
+
+Descartado: los personajes por sonido de Rainbow mode.

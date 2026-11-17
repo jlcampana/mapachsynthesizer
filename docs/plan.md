@@ -201,7 +201,7 @@ Cada fase termina con algo que el niño ya puede tocar.
 | Fase | Contenido | Resultado jugable |
 |---|---|---|
 | **0. Esqueleto** | Workspace, `cpal`, ventana `egui` a pantalla completa, `A` toca un seno | "¡Suena!" |
-| **1. Acordes** | `chispa-theory`, 7 acordes, flechas como modificadores, 1 sinte analógico con ADSR, pantalla principal | Tocar acordes de colores |
+| **1. Acordes** | `chispa-theory` con las tablas de fm1-chord ([investigación §6.1](investigacion.md#61-fm1-chord-un-hichord-dentro-del-fm-1)), 7 acordes, flechas como modificadores, 1 sinte analógico con ADSR, pantalla principal con la leyenda de las teclas en reposo | Tocar acordes de colores |
 | **2. Menús y mando** | Menús gris/amarillo/rojo, tonalidades, octava, `evdev` con el mando de 16 teclas y 3 perillas, asistente "Aprender mando", volumen, tempo y filtro | Cambiar tono y sonido con la perilla |
 | **3. Sonidos** | Motores FM, wavetable, ruido y sampler básico, 24 presets | Muchos instrumentos |
 | **4. Tempo y modos** | Reloj, tap tempo, Rasgueo, Arpegio, Repetir, Zumbido, Melodía | Música que se mueve sola |
@@ -210,7 +210,7 @@ Cada fase termina con algo que el niño ya puede tocar.
 | **7. Looper** | 6 pistas, sincronía, mezclador y auto-grabado de patrones | Componer capas |
 | **8. Taller de samples** | Micro, importación, edición y destrozar | Su propia voz como instrumento |
 | **9. Canciones** | Autoguardado, proyectos, export WAV/OGG/MP3 | Guardar y compartir con la familia |
-| **10. Pulido** | Aleatorio, juegos, animaciones, modo kiosco y arranque automático, paquete `.rpm` / Flatpak | Producto terminado |
+| **10. Pulido** | Aleatorio, juegos, animaciones, ideas de Rainbow mode ([investigación §6.4](investigacion.md#64-qué-podríamos-llevar-a-chispa), puntos 3–7), modo kiosco y arranque automático, paquete `.rpm` / Flatpak | Producto terminado |
 
 Orden de prioridad si hay que recortar: 0 → 1 → 2 → 4 → 6 → 7 → 9 → 3 → 5 → 8 → 10.
 
