@@ -1,0 +1,11 @@
+[package]
+name = "mapach-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+cpal = "0.18.2"
+eframe = "0.37.0"
+mapach-engine = { version = "0.1.0", path = "../mapach-engine" }
+rtrb = "0.4.1"
