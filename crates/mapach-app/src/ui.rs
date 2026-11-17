@@ -7,6 +7,7 @@ use std::f32::consts::TAU;
 use eframe::egui::{Align2, Color32, FontId, Painter, Pos2, Rect, Stroke, StrokeKind, Vec2};
 use mapach_dsp::drums::{Drum, KITS};
 use mapach_engine::drums::{STYLES, VARIATIONS};
+use mapach_engine::looper::TRACKS;
 use mapach_engine::{ARP_PATTERNS, RATES, SOUNDS, STRUM_MS, midi_to_freq};
 use mapach_input::{Arrow, Menu};
 use mapach_theory::{Direction, ModifierMode, NOTE_NAMES};
@@ -235,6 +236,9 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
         .or(st.open_menu.map(|o| (o.menu, Some(o.item))));
     if let Some((m, sel)) = menu {
         menu_page(c, st, m, sel);
+    } else if st.looper_visible() {
+        looper_view(c, st, extra);
+        return;
     } else if st.play_mode == PlayMode::Secuencia {
         sequencer_view(c, st, extra);
         return;
@@ -301,15 +305,134 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
 
     scope(c, st, extra);
     mini_piano(c, st);
-    // Looper (de momento vacío).
-    for i in 0..6 {
-        c.ring(
-            596.0 + i as f32 * 18.0,
-            333.0,
-            7.0,
-            2.0,
-            OLED_APAGADO.lerp_to_gamma(BLANCO, 0.2),
-        );
+    looper_dots(c, st, extra);
+}
+
+/// Los 6 circulitos del looper, abajo a la derecha de la pantalla.
+fn looper_dots(c: &Canvas, st: &State, extra: &Extra) {
+    let lp = &st.looper;
+    for (i, &col) in ACORDES.iter().enumerate().take(TRACKS) {
+        let (x, y) = (596.0 + i as f32 * 18.0, 333.0);
+        if lp.recording == Some(i) {
+            let blink = (extra.time * 4.0).sin() > 0.0;
+            c.circle(x, y, 7.0, if blink { MENU_ROJO } else { OLED_APAGADO });
+        } else if lp.has(i) {
+            c.circle(x, y, 7.0, col);
+        } else {
+            c.ring(x, y, 7.0, 2.0, OLED_APAGADO.lerp_to_gamma(BLANCO, 0.2));
+        }
+        if i == st.track {
+            c.ring(x, y, 9.5, 1.5, BLANCO);
+        }
+    }
+}
+
+/// Pantalla del looper (boceto 03-looper.svg, en pequeño).
+fn looper_view(c: &Canvas, st: &State, extra: &Extra) {
+    let lp = &st.looper;
+    let (x0, x1) = (250.0, 690.0);
+    let title = if lp.length > 0.0 {
+        format!("● LOOPER · {:.1} s", lp.length)
+    } else {
+        "● LOOPER".to_string()
+    };
+    c.text(176.0, 112.0, Align2::LEFT_CENTER, title, 18.0, MENU_ROJO);
+    c.text(
+        690.0,
+        112.0,
+        Align2::RIGHT_CENTER,
+        "1–6 pista · Espacio grabar · Intro ▶",
+        13.0,
+        NEON_CIAN.gamma_multiply(0.7),
+    );
+    for (i, &col) in ACORDES.iter().enumerate().take(TRACKS) {
+        let y = 140.0 + i as f32 * 35.0;
+        let sel = i == st.track;
+        let rec = lp.recording == Some(i);
+        // Número de pista.
+        if lp.has(i) || rec {
+            c.circle(186.0, y, 14.0, col);
+        } else {
+            c.ring(186.0, y, 13.0, 3.0, col.gamma_multiply(0.7));
+        }
+        if sel {
+            c.ring(186.0, y, 17.0, 2.5, BLANCO);
+        }
+        let tc = if lp.has(i) { texto_sobre(col) } else { col };
+        c.text(186.0, y, Align2::CENTER_CENTER, i + 1, 16.0, tc);
+        // Volumen.
+        let vol = st.track_volume[i];
+        for k in 0..5 {
+            let on = vol > k as f32 * 0.2 + 0.01;
+            c.rect(
+                208.0 + k as f32 * 7.0,
+                y - 4.0,
+                5.0,
+                8.0,
+                1.0,
+                if on { NEON_CIAN } else { OLED_APAGADO },
+            );
+        }
+        // Barra de la pista.
+        let w = x1 - x0;
+        if rec {
+            let filled = if lp.length > 0.0 { w } else { w * lp.pos };
+            c.rect(x0, y - 13.0, filled.max(4.0), 26.0, 8.0, col);
+            c.rect_stroke(x0, y - 13.0, w, 26.0, 8.0, 2.0, MENU_ROJO);
+            c.text(x0 + 8.0, y, Align2::LEFT_CENTER, "● REC", 13.0, BLANCO);
+        } else if lp.has(i) {
+            let muted = lp.muted & (1 << i) != 0;
+            c.rect(
+                x0,
+                y - 13.0,
+                w,
+                26.0,
+                8.0,
+                col.gamma_multiply(if muted { 0.3 } else { 1.0 }),
+            );
+            // Rayitas decorativas, como una forma de onda.
+            for k in 0..40 {
+                let x = x0 + 6.0 + k as f32 * (w - 12.0) / 40.0;
+                let h = 4.0 + ((k * 7 + i * 3) % 9) as f32 * 1.2;
+                c.rect(x, y - h / 2.0, 2.0, h, 1.0, BLANCO.gamma_multiply(0.5));
+            }
+        } else {
+            c.rect_stroke(
+                x0,
+                y - 13.0,
+                w,
+                26.0,
+                8.0,
+                1.5,
+                OLED_APAGADO.lerp_to_gamma(BLANCO, 0.15),
+            );
+            if sel {
+                c.text(
+                    (x0 + x1) / 2.0,
+                    y,
+                    Align2::CENTER_CENTER,
+                    "vacía · Espacio para grabar",
+                    13.0,
+                    NEON_CIAN.gamma_multiply(0.6),
+                );
+            }
+        }
+        // Barra de "mantén para borrar".
+        if let Some((t, since)) = st.track_hold
+            && t == i
+            && since.is_finite()
+        {
+            let f = ((extra.time - since) / State::HOLD_TO_CLEAR).clamp(0.0, 1.0) as f32;
+            c.rect(x0, y + 10.0, w * f, 4.0, 2.0, MENU_ROJO);
+            if f > 0.15 {
+                c.text(x1, y, Align2::RIGHT_CENTER, "🗑 borrando…", 13.0, BLANCO);
+            }
+        }
+    }
+    // Cabeza de reproducción.
+    if lp.length > 0.0 && lp.playing {
+        let x = x0 + (x1 - x0) * lp.pos;
+        c.line(&[(x, 124.0), (x, 342.0)], 3.0, BLANCO);
     }
 }
 

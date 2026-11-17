@@ -110,6 +110,7 @@ impl Captura {
                 }
                 v
             }
+            10 => vec![p(Record), r(Record), p(Chord(0))],
             _ => vec![],
         }
     }

@@ -4,6 +4,7 @@
 
 use mapach_dsp::drums::KITS;
 use mapach_engine::drums::{self, Pattern, STEPS, STYLES, VARIATIONS};
+use mapach_engine::looper::{LooperStatus, TRACKS};
 use mapach_engine::{ARP_PATTERNS, Command, Param, RATES, SOUNDS, STRUM_MS, Style};
 use mapach_input::mando;
 use mapach_input::{Arrow, Control, Event, Knob, Menu};
@@ -202,6 +203,20 @@ pub struct State {
     pub seq_row: usize,
     /// Último golpe de batería (para la pantalla).
     pub last_hit: Option<u8>,
+    /// Pista elegida del looper.
+    pub track: usize,
+    /// Estado del looper que llega del motor.
+    pub looper: LooperStatus,
+    pub track_volume: [f32; TRACKS],
+    /// Hasta cuándo se ve la pantalla del looper.
+    pub looper_shown_until: f64,
+    /// Pista que se mantiene pulsada y desde cuándo (mantener 1,5 s = borrar).
+    pub track_hold: Option<(usize, f64)>,
+    /// Grabar está pulsado; si mientras tanto se elige pista, al soltar no se graba.
+    record_held: Option<bool>,
+    /// Última pista grabada, para deshacer.
+    last_recorded: Option<usize>,
+    now: f64,
     pub open_menu: Option<OpenMenu>,
     pub current: Option<Sounding>,
     /// Notas que suenan en modo Melodía (tecla → nota).
@@ -247,6 +262,14 @@ impl Default for State {
             seq_pattern: drums::EMPTY,
             seq_row: 0,
             last_hit: None,
+            track: 0,
+            looper: LooperStatus::default(),
+            track_volume: [1.0; TRACKS],
+            looper_shown_until: 0.0,
+            track_hold: None,
+            record_held: None,
+            last_recorded: None,
+            now: 0.0,
             open_menu: None,
             current: None,
             melody: Vec::new(),
@@ -325,6 +348,65 @@ impl State {
         out.push(Command::DrumsPlay(on));
     }
 
+    /// Segundos que hay que mantener una pista para borrarla.
+    pub const HOLD_TO_CLEAR: f64 = 1.5;
+
+    /// Llamar en cada fotograma con el estado del looper que da el motor.
+    pub fn sync(&mut self, looper: LooperStatus, now: f64) -> Vec<Command> {
+        let mut out = Vec::new();
+        self.now = now;
+        let was_recording = self.looper.recording;
+        self.looper = looper;
+        if let Some(t) = was_recording
+            && looper.recording.is_none()
+        {
+            // Terminó una grabación: siguiente pista vacía.
+            self.last_recorded = looper.has(t).then_some(t);
+            if let Some(next) = (1..=TRACKS)
+                .map(|i| (t + i) % TRACKS)
+                .find(|&i| !looper.has(i))
+            {
+                self.track = next;
+            }
+            self.looper_shown_until = now + 2.0;
+        }
+        if let Some((t, since)) = self.track_hold
+            && now - since >= Self::HOLD_TO_CLEAR
+        {
+            self.track_hold = None;
+            self.clear_track(t, &mut out);
+        }
+        out
+    }
+
+    fn clear_track(&mut self, t: usize, out: &mut Vec<Command>) {
+        out.push(Command::LoopClear(t as u8));
+        self.looper.used &= !(1 << t);
+        if self.last_recorded == Some(t) {
+            self.last_recorded = None;
+        }
+        self.track = t;
+        self.looper_shown_until = self.now + 2.0;
+    }
+
+    /// ¿Se ve la pantalla del looper?
+    pub fn looper_visible(&self) -> bool {
+        self.looper.recording.is_some()
+            || self.now < self.looper_shown_until
+            || self.track_hold.is_some()
+            || self.record_held.is_some()
+    }
+
+    fn record(&mut self, out: &mut Vec<Command>) {
+        out.push(Command::LoopRecord(self.track as u8));
+        // Lo marcamos ya, sin esperar al motor, para que la pantalla responda enseguida.
+        if self.looper.recording.is_none() {
+            self.looper.recording = Some(self.track);
+            self.looper.used |= 1 << self.track;
+        }
+        self.looper_shown_until = self.now + 2.0;
+    }
+
     /// Traduce las teclas crudas del mando y, en el secuenciador, las teclas de pasos.
     fn remap(&self, c: Control) -> Option<Control> {
         let seq = self.play_mode == PlayMode::Secuencia;
@@ -390,6 +472,8 @@ impl State {
 
     /// Suelta todo lo pulsado (al perder el foco o abrir el modo papá).
     pub fn release_all(&mut self) {
+        self.track_hold = None;
+        self.record_held = None;
         self.held.clear();
         self.arrows = [false; 4];
         self.menus_held = [false; 3];
@@ -460,6 +544,12 @@ impl State {
 
     fn press(&mut self, c: Control, now: f64, out: &mut Vec<Command>) {
         match c {
+            // Grabar + tecla de acorde 1–6 (en el mando): elegir pista.
+            Control::Chord(b) if self.record_held.is_some() && (b as usize) < TRACKS => {
+                self.record_held = Some(true);
+                self.track = b as usize;
+                self.looper_shown_until = self.now + 2.0;
+            }
             Control::Chord(b) | Control::ChordHigh(b) if (b as usize) < BUTTONS => {
                 let high = matches!(c, Control::ChordHigh(_));
                 match self.play_mode {
@@ -532,6 +622,22 @@ impl State {
                     self.randomize(m, out);
                 } else if self.open_menu.is_some() {
                     self.open_menu = None;
+                } else if self.looper.recording.is_some() {
+                    // Parar enseguida.
+                    self.record(out);
+                } else {
+                    // Empezar al soltar (por si mientras tanto se elige pista).
+                    self.record_held = Some(false);
+                }
+            }
+            Control::Track(t) if (t as usize) < TRACKS => {
+                self.track = t as usize;
+                self.track_hold = Some((self.track, self.now));
+                self.looper_shown_until = self.now + 2.0;
+            }
+            Control::Undo => {
+                if let Some(t) = self.last_recorded.take() {
+                    self.clear_track(t, out);
                 }
             }
             Control::KnobPress(Knob::Volumen) => {
@@ -558,6 +664,14 @@ impl State {
             Control::Play if self.play_mode == PlayMode::Zumbido && self.held.is_empty() => {
                 self.current = None;
                 out.push(Command::StopChord);
+            }
+            Control::Play if !self.looper.is_empty() => {
+                let on = !self.looper.playing;
+                out.push(Command::LoopPlay(on));
+                self.looper.playing = on;
+                if self.play_mode.is_drums() {
+                    self.set_drums_playing(on, out);
+                }
             }
             Control::Play if self.play_mode.is_drums() => {
                 self.set_drums_playing(!self.drums_playing, out);
@@ -597,6 +711,16 @@ impl State {
                     self.revoice(out);
                 }
             }
+            Control::Record => {
+                if self.record_held.take() == Some(false) {
+                    self.record(out);
+                }
+            }
+            Control::Track(t) => {
+                if self.track_hold.is_some_and(|(h, _)| h == t as usize) {
+                    self.track_hold = None;
+                }
+            }
             Control::Menu(m) => {
                 self.menus_held[menu_idx(m)] = false;
                 if !self.menu_used {
@@ -621,6 +745,13 @@ impl State {
             (Knob::Volumen, Some(Menu::Tono)) => self.change(Item::Ataque, d, out),
             (Knob::Volumen, Some(Menu::Sonido)) => self.change(Item::Release, d, out),
             (Knob::Volumen, Some(Menu::Modo)) => self.change(Item::Brillo, d, out),
+            (Knob::Volumen, None) if self.track_hold.is_some() => {
+                // Pista pulsada + perilla 1: volumen de esa pista.
+                let t = self.track;
+                self.track_hold = Some((t, f64::INFINITY));
+                self.track_volume[t] = (self.track_volume[t] + d as f32 * 0.05).clamp(0.0, 1.0);
+                out.push(Command::LoopVolume(t as u8, self.track_volume[t]));
+            }
             (Knob::Volumen, None) => {
                 self.volume = (self.volume + d as f32 * 0.04).clamp(0.0, 1.0);
                 self.muted = false;
@@ -1234,6 +1365,84 @@ mod tests {
         press(&mut s, Control::Pad(13));
         release(&mut s, Control::Pad(13));
         assert_eq!(s.open_menu.map(|o| o.menu), Some(Menu::Tono));
+    }
+
+    #[test]
+    fn looper_grabar_parar_y_siguiente_pista() {
+        let mut s = State::default();
+        s.sync(LooperStatus::default(), 1.0);
+        press(&mut s, Control::Record);
+        assert!(s.looper_visible());
+        let c = release(&mut s, Control::Record);
+        assert_eq!(c, [Command::LoopRecord(0)]);
+        assert_eq!(s.looper.recording, Some(0));
+        // El motor dice que graba la 0.
+        let rec = LooperStatus {
+            used: 1,
+            recording: Some(0),
+            playing: true,
+            ..Default::default()
+        };
+        s.sync(rec, 2.0);
+        // Pulsar otra vez para enseguida.
+        let c = press(&mut s, Control::Record);
+        assert_eq!(c, [Command::LoopRecord(0)]);
+        release(&mut s, Control::Record);
+        s.sync(
+            LooperStatus {
+                recording: None,
+                ..rec
+            },
+            3.0,
+        );
+        assert_eq!(s.track, 1);
+        // Deshacer borra la última grabación.
+        let c = press(&mut s, Control::Undo);
+        assert_eq!(c, [Command::LoopClear(0)]);
+    }
+
+    #[test]
+    fn mantener_pista_la_borra() {
+        let mut s = State::default();
+        s.sync(LooperStatus::default(), 10.0);
+        press(&mut s, Control::Track(3));
+        assert_eq!(s.track, 3);
+        assert!(s.sync(LooperStatus::default(), 11.0).is_empty());
+        let c = s.sync(LooperStatus::default(), 11.6);
+        assert_eq!(c, [Command::LoopClear(3)]);
+        // Soltar antes no borra.
+        press(&mut s, Control::Track(2));
+        release(&mut s, Control::Track(2));
+        assert!(s.sync(LooperStatus::default(), 20.0).is_empty());
+    }
+
+    #[test]
+    fn grabar_mas_acorde_elige_pista_en_el_mando() {
+        let mut s = State::default();
+        press(&mut s, Control::Pad(8));
+        let c = press(&mut s, Control::Pad(3));
+        assert!(c.is_empty());
+        assert_eq!(s.track, 2);
+        release(&mut s, Control::Pad(3));
+        // Al soltar Grabar no empieza a grabar, porque se ha elegido pista.
+        let c = release(&mut s, Control::Pad(8));
+        assert!(c.is_empty());
+    }
+
+    #[test]
+    fn play_controla_el_looper_si_hay_algo() {
+        let mut s = State::default();
+        s.sync(
+            LooperStatus {
+                used: 1,
+                playing: true,
+                length: 2.0,
+                ..Default::default()
+            },
+            0.0,
+        );
+        let c = press(&mut s, Control::Play);
+        assert_eq!(c, [Command::LoopPlay(false)]);
     }
 
     #[test]

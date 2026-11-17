@@ -219,6 +219,14 @@ impl eframe::App for App {
             }
         }
 
+        let looper = self
+            .audio
+            .as_ref()
+            .map(|a| a.looper())
+            .unwrap_or(self.state.looper);
+        let cmds = self.state.sync(looper, now);
+        self.send_all(cmds);
+
         let focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
         if self.focused && !focused {
             self.release_all();
@@ -329,6 +337,8 @@ impl eframe::App for App {
         // Animación del osciloscopio mientras suena algo.
         if peak > 1e-4
             || drum_step.is_some()
+            || self.state.looper_visible()
+            || self.state.looper.playing
             || self.state.current.is_some()
             || !self.state.melody.is_empty()
         {

@@ -493,6 +493,25 @@ mod tests {
     }
 
     #[test]
+    fn el_looper_repite_lo_grabado() {
+        let mut e = Engine::new(48_000.0);
+        e.handle(Command::LoopRecord(0));
+        e.handle(on(60));
+        render(&mut e, 0.5);
+        e.handle(Command::NoteOff { note: 60 });
+        render(&mut e, 0.5);
+        e.handle(Command::LoopRecord(0));
+        assert!((e.looper_status().length - 1.0).abs() < 0.01);
+        // Ya no suena ninguna voz, pero el looper repite la nota.
+        render(&mut e, 2.0);
+        assert_eq!(e.active_voices(), 0);
+        render(&mut e, 0.95);
+        let buf = render(&mut e, 0.3);
+        assert!(e.peak() > 0.02, "pico {}", e.peak());
+        assert!(buf.iter().any(|s| s.abs() > 0.02));
+    }
+
+    #[test]
     fn volumen_cero_es_silencio() {
         let mut e = Engine::new(48_000.0);
         e.handle(Command::SetParam(Param::Volume(0.0)));
