@@ -2,7 +2,10 @@
 //!
 //! No depende de `egui` ni de `cpal`, así que se prueba con tests normales.
 
+use mapach_dsp::drums::KITS;
+use mapach_engine::drums::{self, Pattern, STEPS, STYLES, VARIATIONS};
 use mapach_engine::{ARP_PATTERNS, Command, Param, RATES, SOUNDS, STRUM_MS, Style};
+use mapach_input::mando;
 use mapach_input::{Arrow, Control, Event, Knob, Menu};
 use mapach_theory::{
     BUTTONS, Chord, Direction, Key, ModifierMode, Scale, VoicingOptions, voice_lead,
@@ -18,17 +21,34 @@ pub enum PlayMode {
     Repetir,
     Zumbido,
     Melodia,
+    /// Las 7 teclas tocan la batería.
+    Bateria,
+    /// Un ritmo suena solo y encima se tocan acordes.
+    Ritmos,
+    /// Secuenciador de 16 pasos.
+    Secuencia,
 }
 
 impl PlayMode {
-    pub const ALL: [PlayMode; 6] = [
+    pub const ALL: [PlayMode; 9] = [
         PlayMode::Tocar,
         PlayMode::Rasgueo,
         PlayMode::Arpegio,
         PlayMode::Repetir,
         PlayMode::Zumbido,
         PlayMode::Melodia,
+        PlayMode::Bateria,
+        PlayMode::Ritmos,
+        PlayMode::Secuencia,
     ];
+
+    /// ¿Es un modo de batería?
+    pub fn is_drums(self) -> bool {
+        matches!(
+            self,
+            PlayMode::Bateria | PlayMode::Ritmos | PlayMode::Secuencia
+        )
+    }
 
     pub fn name(self) -> &'static str {
         match self {
@@ -38,6 +58,9 @@ impl PlayMode {
             PlayMode::Repetir => "Repetir",
             PlayMode::Zumbido => "Zumbido",
             PlayMode::Melodia => "Melodía",
+            PlayMode::Bateria => "Batería",
+            PlayMode::Ritmos => "Ritmos",
+            PlayMode::Secuencia => "Secuencia",
         }
     }
 
@@ -50,6 +73,9 @@ impl PlayMode {
             PlayMode::Repetir => "🔁 REPETIR",
             PlayMode::Zumbido => "🐝 ZUMBIDO",
             PlayMode::Melodia => "♪ MELODÍA",
+            PlayMode::Bateria => "🥁 BATERÍA",
+            PlayMode::Ritmos => "🎶 RITMOS",
+            PlayMode::Secuencia => "▦ SECUENCIA",
         }
     }
 }
@@ -82,6 +108,9 @@ pub enum Item {
     Patron,
     Figura,
     Velocidad,
+    Kit,
+    Estilo,
+    Variacion,
 }
 
 impl Item {
@@ -103,6 +132,9 @@ impl Item {
                 Item::Patron,
                 Item::Figura,
                 Item::Velocidad,
+                Item::Kit,
+                Item::Estilo,
+                Item::Variacion,
             ],
         }
     }
@@ -124,6 +156,9 @@ impl Item {
             Item::Patron => "Patrón",
             Item::Figura => "Figura",
             Item::Velocidad => "Velocidad",
+            Item::Kit => "Batería",
+            Item::Estilo => "Ritmo",
+            Item::Variacion => "Variación",
         }
     }
 }
@@ -157,6 +192,16 @@ pub struct State {
     pub arp_rate: usize,
     pub strum_speed: usize,
     pub repeat_rate: usize,
+    pub kit: usize,
+    /// Estilo de ritmo; `STYLES.len()` es "Mi ritmo" (el del secuenciador).
+    pub drum_style: usize,
+    pub drum_variation: usize,
+    pub drums_playing: bool,
+    pub seq_pattern: Pattern,
+    /// Instrumento que se edita en el secuenciador.
+    pub seq_row: usize,
+    /// Último golpe de batería (para la pantalla).
+    pub last_hit: Option<u8>,
     pub open_menu: Option<OpenMenu>,
     pub current: Option<Sounding>,
     /// Notas que suenan en modo Melodía (tecla → nota).
@@ -195,6 +240,13 @@ impl Default for State {
             arp_rate: 3,
             strum_speed: 1,
             repeat_rate: 1,
+            kit: 0,
+            drum_style: 0,
+            drum_variation: 0,
+            drums_playing: false,
+            seq_pattern: drums::EMPTY,
+            seq_row: 0,
+            last_hit: None,
             open_menu: None,
             current: None,
             melody: Vec::new(),
@@ -242,13 +294,57 @@ impl State {
             Command::SetParam(Param::Volume(self.effective_volume())),
             Command::SetStyle(self.style()),
             Command::SetBpm(self.bpm),
+            Command::SetKit(self.kit as u8),
+            Command::SetPattern(self.drum_pattern()),
         ]
+    }
+
+    /// Patrón que debe sonar en la caja de ritmos.
+    pub fn drum_pattern(&self) -> Pattern {
+        if self.play_mode == PlayMode::Secuencia || self.drum_style >= STYLES.len() {
+            self.seq_pattern
+        } else {
+            drums::rhythm(self.drum_style, self.drum_variation)
+        }
+    }
+
+    /// Nombre del ritmo elegido.
+    pub fn rhythm_name(&self) -> String {
+        if self.drum_style >= STYLES.len() {
+            "Mi ritmo".into()
+        } else {
+            STYLES[self.drum_style].to_string()
+        }
+    }
+
+    fn set_drums_playing(&mut self, on: bool, out: &mut Vec<Command>) {
+        if on {
+            out.push(Command::SetPattern(self.drum_pattern()));
+        }
+        self.drums_playing = on;
+        out.push(Command::DrumsPlay(on));
+    }
+
+    /// Traduce las teclas crudas del mando y, en el secuenciador, las teclas de pasos.
+    fn remap(&self, c: Control) -> Option<Control> {
+        let seq = self.play_mode == PlayMode::Secuencia;
+        match c {
+            Control::Pad(n) if seq => Some(Control::Step(n - 1)),
+            Control::Pad(n) => mando::key_control(n),
+            Control::Track(t) if seq => Some(Control::Step(t)),
+            Control::ChordHigh(b) if seq => Some(Control::Step(8 + b)),
+            other => Some(other),
+        }
     }
 
     /// Modo de toque para el motor.
     pub fn style(&self) -> Style {
         match self.play_mode {
-            PlayMode::Tocar | PlayMode::Melodia => Style::Normal,
+            PlayMode::Tocar
+            | PlayMode::Melodia
+            | PlayMode::Bateria
+            | PlayMode::Ritmos
+            | PlayMode::Secuencia => Style::Normal,
             PlayMode::Rasgueo => Style::Strum {
                 speed: self.strum_speed as u8,
             },
@@ -272,6 +368,8 @@ impl State {
                 Item::Patron => self.play_mode == PlayMode::Arpegio,
                 Item::Figura => matches!(self.play_mode, PlayMode::Arpegio | PlayMode::Repetir),
                 Item::Velocidad => self.play_mode == PlayMode::Rasgueo,
+                Item::Kit => self.play_mode.is_drums(),
+                Item::Estilo | Item::Variacion => self.play_mode == PlayMode::Ritmos,
                 _ => true,
             })
             .collect()
@@ -345,8 +443,16 @@ impl State {
     pub fn handle(&mut self, ev: Event, now: f64) -> Vec<Command> {
         let mut out = Vec::new();
         match ev {
-            Event::Press(c) => self.press(c, now, &mut out),
-            Event::Release(c) => self.release_control(c, &mut out),
+            Event::Press(c) => {
+                if let Some(c) = self.remap(c) {
+                    self.press(c, now, &mut out);
+                }
+            }
+            Event::Release(c) => {
+                if let Some(c) = self.remap(c) {
+                    self.release_control(c, &mut out);
+                }
+            }
             Event::Turn(k, d) => self.turn(k, d, &mut out),
         }
         out
@@ -357,6 +463,18 @@ impl State {
             Control::Chord(b) | Control::ChordHigh(b) if (b as usize) < BUTTONS => {
                 let high = matches!(c, Control::ChordHigh(_));
                 match self.play_mode {
+                    PlayMode::Bateria | PlayMode::Secuencia => {
+                        self.held.retain(|&(x, h)| (x, h) != (b, high));
+                        self.held.push((b, high));
+                        self.last_hit = Some(b);
+                        if self.play_mode == PlayMode::Secuencia {
+                            self.seq_row = b as usize;
+                        }
+                        out.push(Command::DrumHit {
+                            drum: b,
+                            velocity: if high { 0.6 } else { 1.0 },
+                        });
+                    }
                     PlayMode::Melodia => {
                         let note = self.key.scale_note(b as i32) + if high { 12 } else { 0 };
                         self.melody.retain(|(x, _)| *x != c);
@@ -380,9 +498,28 @@ impl State {
                     self.menu_shortcut(m, a, out);
                 } else if let Some(open) = self.open_menu {
                     self.navigate(open, a, out);
+                } else if self.play_mode == PlayMode::Secuencia {
+                    // En el secuenciador, ↑↓ eligen el instrumento.
+                    let d = match a {
+                        Arrow::Up => -1,
+                        Arrow::Down => 1,
+                        _ => 0,
+                    };
+                    self.seq_row = wrap(self.seq_row, d, 7);
                 } else {
                     self.revoice(out);
                 }
+            }
+            Control::Step(n) if (n as usize) < STEPS => {
+                let bit = 1u8 << self.seq_row;
+                self.seq_pattern[n as usize] ^= bit;
+                if self.seq_pattern[n as usize] & bit != 0 {
+                    out.push(Command::DrumHit {
+                        drum: self.seq_row as u8,
+                        velocity: 0.8,
+                    });
+                }
+                out.push(Command::SetPattern(self.drum_pattern()));
             }
             Control::Menu(m) => {
                 self.menus_held[menu_idx(m)] = true;
@@ -407,6 +544,10 @@ impl State {
                     self.randomize(m, out);
                 } else if self.open_menu.is_some() {
                     self.open_menu = None;
+                } else if self.play_mode == PlayMode::Secuencia {
+                    // Salir del secuenciador: el ritmo sigue como "Mi ritmo".
+                    self.drum_style = STYLES.len();
+                    self.set_play_mode(PlayMode::Ritmos, out);
                 }
             }
             Control::KnobPress(Knob::Tempo) | Control::Tap => {
@@ -417,6 +558,9 @@ impl State {
             Control::Play if self.play_mode == PlayMode::Zumbido && self.held.is_empty() => {
                 self.current = None;
                 out.push(Command::StopChord);
+            }
+            Control::Play if self.play_mode.is_drums() => {
+                self.set_drums_playing(!self.drums_playing, out);
             }
             _ => {}
         }
@@ -488,6 +632,8 @@ impl State {
             (Knob::Magica, None) => {
                 if let Some(item) = self.selected_item() {
                     self.change(item, d, out);
+                } else if self.play_mode == PlayMode::Secuencia {
+                    self.seq_row = wrap(self.seq_row, d, 7);
                 } else if self.current.is_some() {
                     self.knob_color = wrap(self.knob_color, d, Direction::KNOB_CYCLE.len());
                     self.revoice(out);
@@ -498,6 +644,8 @@ impl State {
                 let item = match self.play_mode {
                     PlayMode::Arpegio => Item::Patron,
                     PlayMode::Rasgueo => Item::Velocidad,
+                    PlayMode::Ritmos => Item::Variacion,
+                    PlayMode::Bateria | PlayMode::Secuencia => Item::Kit,
                     _ => Item::Figura,
                 };
                 self.change(item, d, out);
@@ -625,6 +773,19 @@ impl State {
                 self.strum_speed = wrap(self.strum_speed, d, STRUM_MS.len());
                 out.push(Command::SetStyle(self.style()));
             }
+            Item::Kit => {
+                self.kit = wrap(self.kit, d, KITS.len());
+                out.push(Command::SetKit(self.kit as u8));
+            }
+            Item::Estilo => {
+                // Uno más que los estilos: "Mi ritmo".
+                self.drum_style = wrap(self.drum_style, d, STYLES.len() + 1);
+                out.push(Command::SetPattern(self.drum_pattern()));
+            }
+            Item::Variacion => {
+                self.drum_variation = wrap(self.drum_variation, d, VARIATIONS.len());
+                out.push(Command::SetPattern(self.drum_pattern()));
+            }
         }
     }
 
@@ -641,6 +802,12 @@ impl State {
                 });
             }
             out.push(Command::SetStyle(self.style()));
+            self.last_hit = None;
+            match m {
+                PlayMode::Ritmos | PlayMode::Secuencia => self.set_drums_playing(true, out),
+                _ if self.drums_playing => self.set_drums_playing(false, out),
+                _ => {}
+            }
         }
     }
 
@@ -682,10 +849,20 @@ impl State {
             Menu::Modo => {
                 let bpm = 70.0 + r(100) as f32;
                 let pat = r(ARP_PATTERNS.len());
+                let style = r(STYLES.len());
+                let var = r(VARIATIONS.len());
                 self.bpm = bpm;
                 self.arp_pattern = pat;
+                if self.play_mode == PlayMode::Secuencia {
+                    // 🎲 en el secuenciador: empieza desde un ritmo al azar.
+                    self.seq_pattern = drums::rhythm(style, var);
+                } else {
+                    self.drum_style = style;
+                    self.drum_variation = var;
+                }
                 out.push(Command::SetBpm(self.bpm));
                 out.push(Command::SetStyle(self.style()));
+                out.push(Command::SetPattern(self.drum_pattern()));
             }
         }
     }
@@ -926,8 +1103,7 @@ mod tests {
     #[test]
     fn modo_melodia_toca_notas_de_la_escala() {
         let mut s = State::default();
-        s.change(Item::Modo, -1, &mut Vec::new());
-        assert_eq!(s.play_mode, PlayMode::Melodia);
+        set_mode(&mut s, PlayMode::Melodia);
         let c = press(&mut s, Control::Chord(2));
         assert_eq!(ons(&c), [64]);
         let c = press(&mut s, Control::ChordHigh(0));
@@ -977,6 +1153,87 @@ mod tests {
         s.change(Item::Modo, 1, &mut out);
         assert!(!s.items(Menu::Modo).contains(&Item::Patron));
         assert!(s.items(Menu::Modo).contains(&Item::Figura));
+    }
+
+    fn set_mode(s: &mut State, m: PlayMode) -> Vec<Command> {
+        let pos = |m: PlayMode| PlayMode::ALL.iter().position(|&x| x == m).unwrap() as i32;
+        let mut out = Vec::new();
+        s.change(Item::Modo, pos(m) - pos(s.play_mode), &mut out);
+        assert_eq!(s.play_mode, m);
+        out
+    }
+
+    #[test]
+    fn bateria_toca_golpes() {
+        let mut s = State::default();
+        set_mode(&mut s, PlayMode::Bateria);
+        let c = press(&mut s, Control::Chord(1));
+        assert_eq!(
+            c,
+            [Command::DrumHit {
+                drum: 1,
+                velocity: 1.0
+            }]
+        );
+        assert!(s.chord_held(1));
+        release(&mut s, Control::Chord(1));
+        assert!(!s.chord_held(1));
+        // Play arranca el ritmo.
+        let c = press(&mut s, Control::Play);
+        assert!(c.contains(&Command::DrumsPlay(true)));
+    }
+
+    #[test]
+    fn ritmos_arranca_solo_y_para_al_salir() {
+        let mut s = State::default();
+        let c = set_mode(&mut s, PlayMode::Ritmos);
+        assert!(c.contains(&Command::DrumsPlay(true)));
+        assert!(s.drums_playing);
+        // Encima se tocan acordes normales.
+        let c = press(&mut s, Control::Chord(0));
+        assert!(chord(&c).is_some());
+        let mut out = Vec::new();
+        s.change(Item::Variacion, 1, &mut out);
+        assert!(matches!(out[0], Command::SetPattern(_)));
+        let c = set_mode(&mut s, PlayMode::Tocar);
+        assert!(c.contains(&Command::DrumsPlay(false)));
+    }
+
+    #[test]
+    fn secuenciador_enciende_pasos() {
+        let mut s = State::default();
+        set_mode(&mut s, PlayMode::Secuencia);
+        // Elegir la caja tocándola y encender los pasos 5 y 13 desde el mando.
+        press(&mut s, Control::Chord(1));
+        release(&mut s, Control::Chord(1));
+        press(&mut s, Control::Pad(5));
+        press(&mut s, Control::Pad(13));
+        assert_eq!(s.seq_pattern[4], 0b10);
+        assert_eq!(s.seq_pattern[12], 0b10);
+        // Desde el teclado: 1 y Q son los pasos 1 y 9; ↓ cambia de instrumento.
+        press(&mut s, Control::Arrow(Arrow::Down));
+        press(&mut s, Control::Track(0));
+        press(&mut s, Control::ChordHigh(0));
+        assert_eq!(s.seq_pattern[0], 0b100);
+        assert_eq!(s.seq_pattern[8], 0b100);
+        // Volver a pulsar apaga.
+        press(&mut s, Control::Track(0));
+        assert_eq!(s.seq_pattern[0], 0);
+        // Pulsar la perilla mágica sale a Ritmos con "Mi ritmo".
+        press(&mut s, Control::KnobPress(Knob::Magica));
+        assert_eq!(s.play_mode, PlayMode::Ritmos);
+        assert_eq!(s.drum_pattern(), s.seq_pattern);
+        assert!(s.drums_playing);
+    }
+
+    #[test]
+    fn el_mando_sigue_tocando_acordes_fuera_del_secuenciador() {
+        let mut s = State::default();
+        let c = press(&mut s, Control::Pad(1));
+        assert!(chord(&c).is_some());
+        press(&mut s, Control::Pad(13));
+        release(&mut s, Control::Pad(13));
+        assert_eq!(s.open_menu.map(|o| o.menu), Some(Menu::Tono));
     }
 
     #[test]

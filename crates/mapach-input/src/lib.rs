@@ -69,6 +69,11 @@ pub enum Control {
     Canciones,
     /// Modo papá.
     Papa,
+    /// Tecla `n` (1–16) del mando, tal cual. La app decide qué hace según el modo
+    /// (ver [`mando::key_control`]); en el secuenciador son los 16 pasos.
+    Pad(u8),
+    /// Paso 0–15 del secuenciador.
+    Step(u8),
 }
 
 /// Un evento de entrada.

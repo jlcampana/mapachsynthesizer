@@ -298,6 +298,7 @@ impl eframe::App for App {
             self.pointer_chord = target;
         }
 
+        let drum_step = self.audio.as_ref().and_then(|a| a.drum_step());
         let (peak, status) = match &self.audio {
             Some(a) => (
                 a.peak(),
@@ -316,6 +317,7 @@ impl eframe::App for App {
                 time: now,
                 peak,
                 status: &status,
+                drum_step,
             },
         );
         if self.papa {
@@ -325,7 +327,11 @@ impl eframe::App for App {
         self.autosave(now, false);
 
         // Animación del osciloscopio mientras suena algo.
-        if peak > 1e-4 || self.state.current.is_some() || !self.state.melody.is_empty() {
+        if peak > 1e-4
+            || drum_step.is_some()
+            || self.state.current.is_some()
+            || !self.state.melody.is_empty()
+        {
             ctx.request_repaint();
         } else {
             ctx.request_repaint_after(std::time::Duration::from_millis(500));

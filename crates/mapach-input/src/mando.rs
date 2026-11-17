@@ -42,7 +42,7 @@ pub fn key_control(n: u8) -> Option<Control> {
 /// Traduce un código de `evdev` del mando.
 pub fn map_code(code: KeyCode) -> Option<Mapped> {
     use KeyCode as K;
-    let key = |n| key_control(n).map(Mapped::Control);
+    let key = |n| Some(Mapped::Control(Control::Pad(n)));
     match code {
         K::KEY_F13 => key(1),
         K::KEY_F14 => key(2),
@@ -236,20 +236,19 @@ mod tests {
     fn teclas_del_mando() {
         assert_eq!(
             translate(KeyCode::KEY_F13, 1),
-            Some(Event::Press(Control::Chord(0)))
+            Some(Event::Press(Control::Pad(1)))
         );
         assert_eq!(
             translate(KeyCode::KEY_F19, 0),
-            Some(Event::Release(Control::Chord(6)))
+            Some(Event::Release(Control::Pad(7)))
         );
         assert_eq!(
             translate(KeyCode::KEY_KP4, 1),
-            Some(Event::Press(Control::Play))
+            Some(Event::Press(Control::Pad(16)))
         );
-        assert_eq!(
-            translate(KeyCode::KEY_KP1, 1),
-            Some(Event::Press(Control::Menu(Menu::Tono)))
-        );
+        assert_eq!(key_control(1), Some(Control::Chord(0)));
+        assert_eq!(key_control(13), Some(Control::Menu(Menu::Tono)));
+        assert_eq!(key_control(16), Some(Control::Play));
         assert_eq!(translate(KeyCode::KEY_F20, 2), None);
     }
 

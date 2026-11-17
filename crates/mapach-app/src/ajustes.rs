@@ -2,6 +2,8 @@
 
 use std::path::PathBuf;
 
+use mapach_dsp::drums::KITS;
+use mapach_engine::drums::{STYLES, VARIATIONS};
 use mapach_engine::{ARP_PATTERNS, RATES, SOUNDS, STRUM_MS};
 use mapach_theory::{Key, ModifierMode, Scale};
 use serde::{Deserialize, Serialize};
@@ -29,6 +31,11 @@ pub struct Ajustes {
     pub figura: usize,
     pub rasgueo: usize,
     pub repetir: usize,
+    pub kit: usize,
+    pub ritmo: usize,
+    pub variacion: usize,
+    /// "Mi ritmo": 16 pasos, un bit por instrumento.
+    pub mi_ritmo: Vec<u8>,
 }
 
 impl Default for Ajustes {
@@ -61,6 +68,10 @@ impl Ajustes {
             figura: s.arp_rate,
             rasgueo: s.strum_speed,
             repetir: s.repeat_rate,
+            kit: s.kit,
+            ritmo: s.drum_style,
+            variacion: s.drum_variation,
+            mi_ritmo: s.seq_pattern.to_vec(),
         }
     }
 
@@ -83,6 +94,12 @@ impl Ajustes {
         s.arp_rate = self.figura % RATES.len();
         s.strum_speed = self.rasgueo % STRUM_MS.len();
         s.repeat_rate = self.repetir % RATES.len();
+        s.kit = self.kit % KITS.len();
+        s.drum_style = self.ritmo % (STYLES.len() + 1);
+        s.drum_variation = self.variacion % VARIATIONS.len();
+        for (dst, src) in s.seq_pattern.iter_mut().zip(&self.mi_ritmo) {
+            *dst = src & 0x7f;
+        }
     }
 
     pub fn path() -> Option<PathBuf> {
@@ -131,6 +148,8 @@ mod tests {
         s.sound = 3;
         s.play_mode = PlayMode::Arpegio;
         s.bpm = 95.0;
+        s.seq_pattern[3] = 0b101;
+        s.drum_style = 7;
         let a = Ajustes::from_state(&s);
         let text = ron::to_string(&a).unwrap();
         let b: Ajustes = ron::from_str(&text).unwrap();

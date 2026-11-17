@@ -7,6 +7,7 @@ edition = "2024"
 anyhow = "1.0.104"
 cpal = "0.18.2"
 eframe = "0.37.0"
+mapach-dsp = { version = "0.1.0", path = "../mapach-dsp" }
 mapach-engine = { version = "0.1.0", path = "../mapach-engine" }
 mapach-input = { version = "0.1.0", path = "../mapach-input" }
 mapach-theory = { version = "0.1.0", path = "../mapach-theory" }

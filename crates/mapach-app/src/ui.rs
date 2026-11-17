@@ -5,6 +5,8 @@
 use std::f32::consts::TAU;
 
 use eframe::egui::{Align2, Color32, FontId, Painter, Pos2, Rect, Stroke, StrokeKind, Vec2};
+use mapach_dsp::drums::{Drum, KITS};
+use mapach_engine::drums::{STYLES, VARIATIONS};
 use mapach_engine::{ARP_PATTERNS, RATES, SOUNDS, STRUM_MS, midi_to_freq};
 use mapach_input::{Arrow, Menu};
 use mapach_theory::{Direction, ModifierMode, NOTE_NAMES};
@@ -101,6 +103,8 @@ pub struct Extra<'a> {
     pub time: f64,
     pub peak: f32,
     pub status: &'a str,
+    /// Paso de la caja de ritmos que suena.
+    pub drum_step: Option<usize>,
 }
 
 pub fn draw(c: &Canvas, st: &State, extra: &Extra) {
@@ -231,6 +235,13 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
         .or(st.open_menu.map(|o| (o.menu, Some(o.item))));
     if let Some((m, sel)) = menu {
         menu_page(c, st, m, sel);
+    } else if st.play_mode == PlayMode::Secuencia {
+        sequencer_view(c, st, extra);
+        return;
+    } else if st.play_mode == PlayMode::Bateria
+        || (st.play_mode == PlayMode::Ritmos && st.current.is_none())
+    {
+        drums_view(c, st, extra);
     } else if st.play_mode == PlayMode::Melodia {
         melody_view(c, st);
     } else if let Some(s) = &st.current {
@@ -532,6 +543,9 @@ fn value_text(st: &State, item: Item) -> String {
         Item::Figura if st.play_mode == PlayMode::Repetir => RATES[st.repeat_rate].0.to_string(),
         Item::Figura => RATES[st.arp_rate].0.to_string(),
         Item::Velocidad => STRUM_MS[st.strum_speed].0.to_string(),
+        Item::Kit => format!("{} {}", KITS[st.kit].icon, KITS[st.kit].name),
+        Item::Estilo => st.rhythm_name(),
+        Item::Variacion => VARIATIONS[st.drum_variation].to_string(),
     }
 }
 
@@ -637,6 +651,111 @@ fn joystick(c: &Canvas, st: &State) {
 const LETRAS: [&str; 7] = ["A", "S", "D", "F", "G", "H", "J"];
 const ROMANOS: [&str; 7] = ["I", "ii", "iii", "IV", "V", "vi", "vii"];
 
+/// 16 puntos con el paso que suena.
+fn step_dots(c: &Canvas, pattern: &[u8; 16], step: Option<usize>, y: f32) {
+    for (i, &bits) in pattern.iter().enumerate() {
+        let x = 196.0 + i as f32 * 29.5;
+        let on = bits != 0;
+        let col = if step == Some(i) {
+            NEON_AMARILLO
+        } else if on {
+            NEON_ROSA.gamma_multiply(if i % 4 == 0 { 1.0 } else { 0.6 })
+        } else {
+            OLED_APAGADO
+        };
+        let r = if step == Some(i) { 9.0 } else { 7.0 };
+        c.circle(x, y, r, col);
+    }
+}
+
+fn drums_view(c: &Canvas, st: &State, extra: &Extra) {
+    let kit = &KITS[st.kit];
+    if st.play_mode == PlayMode::Ritmos || st.drums_playing {
+        let title = format!(
+            "{}  ·  {}",
+            st.rhythm_name(),
+            if st.drum_style < STYLES.len() {
+                VARIATIONS[st.drum_variation]
+            } else {
+                "16 pasos"
+            }
+        );
+        c.text(
+            430.0,
+            124.0,
+            Align2::CENTER_CENTER,
+            title,
+            26.0,
+            NEON_AMARILLO,
+        );
+    }
+    match st.last_hit {
+        Some(b) if st.play_mode == PlayMode::Bateria => {
+            let d = Drum::ALL[b as usize];
+            let col = ACORDES[b as usize];
+            c.circle(430.0, 186.0, 44.0, col);
+            c.text(430.0, 186.0, Align2::CENTER_CENTER, d.icon(), 40.0, BLANCO);
+            c.text(530.0, 186.0, Align2::LEFT_CENTER, d.name(), 24.0, NEON_CIAN);
+        }
+        _ => {
+            let hint = if st.drums_playing {
+                "■ Intro para parar"
+            } else {
+                "▶ Intro para empezar"
+            };
+            c.text(430.0, 180.0, Align2::CENTER_CENTER, hint, 22.0, NEON_CIAN);
+        }
+    }
+    c.text(
+        686.0,
+        110.0,
+        Align2::RIGHT_TOP,
+        format!("{} {}", kit.icon, kit.name),
+        15.0,
+        NEON_CIAN.gamma_multiply(0.7),
+    );
+    if st.play_mode == PlayMode::Ritmos || st.drums_playing {
+        step_dots(c, &st.drum_pattern(), extra.drum_step, 248.0);
+    }
+}
+
+/// Rejilla del secuenciador: 7 instrumentos × 16 pasos.
+fn sequencer_view(c: &Canvas, st: &State, extra: &Extra) {
+    let (x0, y0, cw, rh) = (232.0, 104.0, 26.0, 32.0);
+    for (r, d) in Drum::ALL.iter().enumerate() {
+        let y = y0 + r as f32 * rh;
+        let sel = r == st.seq_row;
+        if sel {
+            c.rect(162.0, y - 2.0, 536.0, rh - 2.0, 10.0, OLED_APAGADO);
+        }
+        c.text(176.0, y + 15.0, Align2::LEFT_CENTER, d.icon(), 18.0, BLANCO);
+        let col = ACORDES[r];
+        for (i, &bits) in st.seq_pattern.iter().enumerate() {
+            let x = x0 + i as f32 * cw + (i / 4) as f32 * 4.0;
+            let on = bits & (1 << r) != 0;
+            let fill = if on {
+                col
+            } else if extra.drum_step == Some(i) {
+                OLED_APAGADO.lerp_to_gamma(BLANCO, 0.35)
+            } else {
+                OLED_APAGADO.lerp_to_gamma(BLANCO, if i % 4 == 0 { 0.15 } else { 0.07 })
+            };
+            c.rect(x, y + 3.0, cw - 5.0, rh - 10.0, 6.0, fill);
+            if on && extra.drum_step == Some(i) {
+                c.rect_stroke(x - 2.0, y + 1.0, cw - 1.0, rh - 6.0, 7.0, 2.0, BLANCO);
+            }
+        }
+    }
+    c.text(
+        430.0,
+        352.0,
+        Align2::CENTER_BOTTOM,
+        "1–8 y Q–I encienden pasos · ↑↓ instrumento · Intro ▶",
+        13.0,
+        NEON_CIAN.gamma_multiply(0.7),
+    );
+}
+
 fn chord_buttons(c: &Canvas, st: &State) {
     for b in 0..7usize {
         let r = chord_button_rect(b);
@@ -651,7 +770,12 @@ fn chord_buttons(c: &Canvas, st: &State) {
         c.rect(x + 4.0, y + 4.0, w - 8.0, h - 10.0, 18.0, col);
         let tc = texto_sobre(col);
         let cx = x + w / 2.0;
-        if st.play_mode == PlayMode::Melodia {
+        if matches!(st.play_mode, PlayMode::Bateria | PlayMode::Secuencia) {
+            let d = Drum::ALL[b];
+            c.text(cx, y + 42.0, Align2::CENTER_CENTER, d.icon(), 38.0, tc);
+            let size = if d.name().len() > 8 { 13.0 } else { 17.0 };
+            c.text(cx, y + 80.0, Align2::CENTER_CENTER, d.name(), size, tc);
+        } else if st.play_mode == PlayMode::Melodia {
             c.text(cx, y + 48.0, Align2::CENTER_CENTER, "♪", 40.0, tc);
         } else if st.show_names {
             let name = st.chord_for(b as u8, false).name();

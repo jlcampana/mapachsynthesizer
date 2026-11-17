@@ -70,6 +70,46 @@ impl Captura {
                 p(Arrow(A::Down)),
                 p(Chord(3)),
             ],
+            // Batería: pasar a modo Batería con el menú rojo y tocar la caja.
+            7 => {
+                let mut v = vec![p(Menu(M::Modo))];
+                for _ in 0..6 {
+                    v.push(p(Arrow(A::Right)));
+                    v.push(r(Arrow(A::Right)));
+                }
+                v.extend([r(Menu(M::Modo)), p(Chord(1))]);
+                v
+            }
+            8 => {
+                let mut v = vec![p(Menu(M::Modo))];
+                for _ in 0..7 {
+                    v.push(p(Arrow(A::Right)));
+                    v.push(r(Arrow(A::Right)));
+                }
+                v.push(r(Menu(M::Modo)));
+                v
+            }
+            9 => {
+                let mut v = vec![p(Menu(M::Modo))];
+                for _ in 0..8 {
+                    v.push(p(Arrow(A::Right)));
+                    v.push(r(Arrow(A::Right)));
+                }
+                v.push(r(Menu(M::Modo)));
+                for (row, steps) in [
+                    (0u8, &[1u8, 7, 11][..]),
+                    (1, &[5, 13]),
+                    (2, &[1, 3, 5, 7, 9, 11, 13, 15]),
+                ] {
+                    v.push(p(Chord(row)));
+                    v.push(r(Chord(row)));
+                    for &st in steps {
+                        v.push(p(Pad(st)));
+                        v.push(r(Pad(st)));
+                    }
+                }
+                v
+            }
             _ => vec![],
         }
     }

@@ -1889,6 +1889,7 @@ dependencies = [
  "anyhow",
  "cpal",
  "eframe",
+ "mapach-dsp",
  "mapach-engine",
  "mapach-input",
  "mapach-theory",

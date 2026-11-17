@@ -1,7 +1,7 @@
 //! Teclado del ordenador → controles lógicos (ver `docs/plan.md` §2).
 
 use eframe::egui::{Key, Modifiers};
-use mapach_input::{Arrow, Control, Event, Knob, Menu, mando};
+use mapach_input::{Arrow, Control, Event, Knob, Menu};
 
 /// Lo que hace una tecla.
 pub enum KeyAction {
@@ -54,6 +54,10 @@ pub fn translate(key: Key, mods: Modifiers, pressed: bool) -> Option<KeyAction> 
         K::Num4 => ev(Control::Track(3)),
         K::Num5 => ev(Control::Track(4)),
         K::Num6 => ev(Control::Track(5)),
+        // 7, 8 e I solo sirven en el secuenciador (pasos 7, 8 y 16).
+        K::Num7 => ev(Control::Track(6)),
+        K::Num8 => ev(Control::Track(7)),
+        K::I => ev(Control::ChordHigh(7)),
         K::F1 => ev(Control::Preset(0)),
         K::F2 => ev(Control::Preset(1)),
         K::F3 => ev(Control::Preset(2)),
@@ -86,7 +90,7 @@ pub fn translate(key: Key, mods: Modifiers, pressed: bool) -> Option<KeyAction> 
 }
 
 fn mando_key(n: u8, pressed: bool) -> Option<KeyAction> {
-    let c = mando::key_control(n)?;
+    let c = Control::Pad(n);
     Some(KeyAction::Event(if pressed {
         Event::Press(c)
     } else {
