@@ -6,9 +6,13 @@
 
 pub mod audio;
 mod patch;
+pub mod performer;
 mod voice;
 
 pub use patch::{Patch, SOUNDS, Sound};
+pub use performer::{ARP_PATTERNS, MAX_CHORD, RATES, STRUM_MS, Style};
+
+use performer::{Out, Performer};
 
 use mapach_dsp::{AdsrParams, Limiter, Smoothed, db_to_gain};
 use voice::Voice;
@@ -40,6 +44,61 @@ pub enum Command {
     /// Cambia el sonido (las perillas de ataque, release y brillo vuelven a los del sonido).
     SetPatch(Patch),
     SetParam(Param),
+    /// Toca un acorde con el modo de toque actual. `notes[..len]` sin el bajo.
+    /// `retrigger`: tecla nueva; si es `false` solo cambia lo necesario (flechas).
+    ChordOn {
+        notes: [u8; MAX_CHORD],
+        len: u8,
+        bass: Option<u8>,
+        velocity: f32,
+        retrigger: bool,
+    },
+    /// Se suelta la tecla del acorde.
+    ChordOff,
+    /// Para todo lo que toca el intérprete (también el zumbido).
+    StopChord,
+    SetStyle(Style),
+    SetBpm(f32),
+}
+
+impl Command {
+    /// Construye un `ChordOn` a partir de una lista de notas.
+    pub fn chord(notes: &[i32], bass: Option<i32>, velocity: f32, retrigger: bool) -> Command {
+        let mut arr = [0u8; MAX_CHORD];
+        let len = notes.len().min(MAX_CHORD);
+        for (a, &n) in arr.iter_mut().zip(notes) {
+            *a = n.clamp(0, 127) as u8;
+        }
+        Command::ChordOn {
+            notes: arr,
+            len: len as u8,
+            bass: bass.map(|b| b.clamp(0, 127) as u8),
+            velocity,
+            retrigger,
+        }
+    }
+}
+
+/// Búfer fijo para las órdenes del intérprete (sin reservar memoria).
+struct OutBuf {
+    buf: [Out; 160],
+    len: usize,
+}
+
+impl OutBuf {
+    fn new() -> Self {
+        Self {
+            buf: [Out::Off(0); 160],
+            len: 0,
+        }
+    }
+
+    fn push(&mut self, o: Out) {
+        if self.len < self.buf.len() {
+            self.buf[self.len] = o;
+            self.len += 1;
+        }
+    }
 }
 
 /// Número máximo de voces simultáneas.
@@ -67,6 +126,7 @@ pub struct Engine {
     brightness: Smoothed,
     volume: Smoothed,
     limiter: Limiter,
+    performer: Performer,
     /// Contador para saber qué voz es la más vieja.
     clock: u64,
     peak: f32,
@@ -83,6 +143,7 @@ impl Engine {
             brightness: Smoothed::new(patch.brightness, 0.02, sample_rate),
             volume: Smoothed::new(0.7, 0.02, sample_rate),
             limiter: Limiter::new(db_to_gain(DEFAULT_MAX_DB), 0.15, sample_rate),
+            performer: Performer::new(sample_rate),
             clock: 0,
             peak: 0.0,
         }
@@ -110,7 +171,40 @@ impl Engine {
                     v.release();
                 }
             }
-            Command::AllNotesOff => self.voices.iter_mut().for_each(Voice::release),
+            Command::AllNotesOff => {
+                let mut ob = OutBuf::new();
+                self.performer.stop(&mut |o| ob.push(o));
+                self.voices.iter_mut().for_each(Voice::release);
+            }
+            Command::ChordOn {
+                notes,
+                len,
+                bass,
+                velocity,
+                retrigger,
+            } => {
+                let mut ob = OutBuf::new();
+                let len = (len as usize).min(MAX_CHORD);
+                self.performer
+                    .chord_on(&notes[..len], bass, velocity, retrigger, &mut |o| ob.push(o));
+                self.apply(&ob);
+            }
+            Command::ChordOff => {
+                let mut ob = OutBuf::new();
+                self.performer.chord_off(&mut |o| ob.push(o));
+                self.apply(&ob);
+            }
+            Command::StopChord => {
+                let mut ob = OutBuf::new();
+                self.performer.stop(&mut |o| ob.push(o));
+                self.apply(&ob);
+            }
+            Command::SetStyle(st) => {
+                let mut ob = OutBuf::new();
+                self.performer.set_style(st, &mut |o| ob.push(o));
+                self.apply(&ob);
+            }
+            Command::SetBpm(b) => self.performer.set_bpm(b),
             Command::SetPatch(p) => {
                 self.patch = p;
                 self.env = p.env;
@@ -123,6 +217,19 @@ impl Engine {
                 Param::Brightness(b) => self.brightness.set(b.clamp(0.0, 1.0)),
                 Param::MaxLevelDb(db) => self.limiter.set_ceiling(db_to_gain(db.clamp(-40.0, 0.0))),
             },
+        }
+    }
+
+    fn apply(&mut self, ob: &OutBuf) {
+        for &o in &ob.buf[..ob.len] {
+            match o {
+                Out::On(n, v) => self.note_on(n, v),
+                Out::Off(n) => {
+                    for v in self.voices.iter_mut().filter(|v| v.is_held(n)) {
+                        v.release();
+                    }
+                }
+            }
         }
     }
 
@@ -169,6 +276,9 @@ impl Engine {
         let mut start = 0;
         while start < frames {
             let n = SUB.min(frames - start);
+            let mut ob = OutBuf::new();
+            self.performer.advance(n, &mut |o| ob.push(o));
+            self.apply(&ob);
             let mut bright = 0.0;
             for _ in 0..n {
                 bright = self.brightness.next();
@@ -280,6 +390,19 @@ mod tests {
         assert_eq!(e.active_voices(), MAX_VOICES);
         let buf = render(&mut e, 0.1);
         assert!(buf.iter().all(|s| s.is_finite()));
+    }
+
+    #[test]
+    fn arpegio_en_el_motor() {
+        let mut e = Engine::new(48_000.0);
+        e.handle(Command::SetStyle(Style::Arp { pattern: 0, rate: 3 }));
+        e.handle(Command::chord(&[60, 64, 67], Some(48), 0.9, true));
+        render(&mut e, 0.05);
+        // Bajo + una nota del arpegio.
+        assert_eq!(e.active_voices(), 2);
+        e.handle(Command::ChordOff);
+        render(&mut e, 3.0);
+        assert_eq!(e.active_voices(), 0);
     }
 
     #[test]
