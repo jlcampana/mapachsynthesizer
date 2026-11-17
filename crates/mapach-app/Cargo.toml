@@ -10,4 +10,6 @@ eframe = "0.37.0"
 mapach-engine = { version = "0.1.0", path = "../mapach-engine" }
 mapach-input = { version = "0.1.0", path = "../mapach-input" }
 mapach-theory = { version = "0.1.0", path = "../mapach-theory" }
+ron = "0.12.3"
 rtrb = "0.4.1"
+serde = { version = "1.0.229", features = ["derive"] }

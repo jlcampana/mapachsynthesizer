@@ -1,5 +1,6 @@
 //! Mapachsynthesizer: sintetizador para niños.
 
+mod ajustes;
 mod captura;
 mod keyboard;
 mod state;
@@ -76,6 +77,9 @@ struct App {
     /// Giro acumulado de la rueda del ratón.
     wheel: f32,
     captura: Option<captura::Captura>,
+    /// Últimos ajustes guardados y cuándo se miró por última vez.
+    saved: ajustes::Ajustes,
+    last_save_check: f64,
 }
 
 impl App {
@@ -87,9 +91,17 @@ impl App {
         let (tx, mando_rx) = mpsc::channel();
         let (stx, mando_status_rx) = mpsc::channel();
         mando::spawn(tx, stx, move || ctx.request_repaint());
+        let mut state = State::default();
+        // En modo captura no se leen ni se guardan los ajustes del niño.
+        if captura.is_none()
+            && let Some(a) = ajustes::Ajustes::load()
+        {
+            a.apply(&mut state);
+        }
+        let saved = ajustes::Ajustes::from_state(&state);
         let mut app = Self {
             audio,
-            state: State::default(),
+            state,
             mando_rx,
             mando_status_rx,
             mando_status: mando::Status::Buscando,
@@ -98,6 +110,8 @@ impl App {
             focused: true,
             wheel: 0.0,
             captura,
+            saved,
+            last_save_check: 0.0,
         };
         let cmds = app.state.initial_commands();
         app.send_all(cmds);
@@ -122,6 +136,21 @@ impl App {
         self.state.release_all();
         self.pointer_chord = None;
         self.send_all(vec![Command::AllNotesOff]);
+    }
+
+    /// Guarda los ajustes si han cambiado (como mucho cada 2 s).
+    fn autosave(&mut self, now: f64, force: bool) {
+        if self.captura.is_some() || (!force && now - self.last_save_check < 2.0) {
+            return;
+        }
+        self.last_save_check = now;
+        let a = ajustes::Ajustes::from_state(&self.state);
+        if a != self.saved {
+            match a.save() {
+                Ok(()) => self.saved = a,
+                Err(e) => eprintln!("No se pudieron guardar los ajustes: {e}"),
+            }
+        }
     }
 
     fn papa_lines(&self) -> Vec<String> {
@@ -158,6 +187,10 @@ fn status_text(s: mando::Status) -> &'static str {
 }
 
 impl eframe::App for App {
+    fn on_exit(&mut self) {
+        self.autosave(f64::MAX, true);
+    }
+
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if self.captura.is_some() {
             ctx.send_viewport_cmd(egui::ViewportCommand::RequestPaintWhileHidden);
@@ -212,6 +245,7 @@ impl eframe::App for App {
             {
                 if self.papa {
                     if pressed && key == egui::Key::Q {
+                        self.autosave(now, true);
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                     if pressed
@@ -287,6 +321,8 @@ impl eframe::App for App {
         if self.papa {
             ui::draw_papa(&canvas, &self.papa_lines());
         }
+
+        self.autosave(now, false);
 
         // Animación del osciloscopio mientras suena algo.
         if peak > 1e-4 || self.state.current.is_some() || !self.state.melody.is_empty() {
