@@ -1,10 +1,10 @@
-# Macropad de 16 teclas y 3 perillas (USB 514c:8850) para Chispa.
+# Macropad de 16 teclas y 3 perillas (USB 514c:8850) para Mapachsynthesizer.
 # Da acceso al usuario con sesión abierta, sin sudo:
 #   - hidraw: para programarlo con herramientas/mando.py
 #   - input:  para que la app lo lea con evdev
 #
 # Instalar:
-#   sudo cp config/70-chispa-mando.rules /etc/udev/rules.d/
+#   sudo cp config/70-mapachsynthesizer-mando.rules /etc/udev/rules.d/
 #   sudo udevadm control --reload-rules && sudo udevadm trigger
 # y desenchufar y volver a enchufar el mando.
 

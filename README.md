@@ -1,4 +1,4 @@
-# Chispa 🎹⚡ (nombre provisional)
+# Mapachsynthesizer 🦝🎹
 
 Sintetizador para niños, escrito en Rust, para Linux. Se toca con el teclado del ordenador
 y una perilla, y su interfaz de colores vivos está inspirada en el

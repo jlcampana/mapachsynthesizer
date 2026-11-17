@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="960" height="540" font-family="Fredoka, Nunito, 'Arial Rounded MT Bold', Arial, sans-serif">
-  <title>Chispa – mis canciones: guardar y exportar</title>
+  <title>Mapachsynthesizer – mis canciones: guardar y exportar</title>
   <defs>
     <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#FFD23F"/><stop offset="1" stop-color="#FFB000"/>
@@ -78,6 +78,6 @@
     <text x="0" y="20" font-size="17" fill="#FFE45C">Creando OGG…</text>
     <rect x="0" y="34" width="200" height="26" rx="13" fill="#3d2c66"/>
     <rect x="0" y="34" width="136" height="26" rx="13" fill="#FFE45C"/>
-    <text x="0" y="84" font-size="13" fill="#8a7bb0">~/Música/Chispa/Exportadas/</text>
+    <text x="0" y="84" font-size="13" fill="#8a7bb0">~/Música/Mapachsynthesizer/Exportadas/</text>
   </g>
 </svg>

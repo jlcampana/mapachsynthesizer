@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 680" width="960" height="680" font-family="Fredoka, Nunito, 'Arial Rounded MT Bold', Arial, sans-serif">
-  <title>Chispa – mapa del mando de 16 teclas y 3 perillas</title>
+  <title>Mapachsynthesizer – mapa del mando de 16 teclas y 3 perillas</title>
   <rect width="960" height="680" rx="30" fill="#FFC21A"/>
   <text x="40" y="54" font-size="30" font-weight="700" fill="#5A3A00">El mando: 16 teclas + 3 perillas</text>
   <text x="40" y="82" font-size="16" font-weight="700" fill="#8a5a00">modo Tocar · (posición de las perillas por confirmar)</text>

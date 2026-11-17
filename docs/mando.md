@@ -113,11 +113,11 @@ regla udev. El protocolo sale de [macropad-16key-3knob](https://github.com/elmit
 
 ```bash
 # Una vez: permisos para usar el mando sin sudo (después, desenchufar y enchufar)
-sudo cp config/70-chispa-mando.rules /etc/udev/rules.d/
+sudo cp config/70-mapachsynthesizer-mando.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger
 
 python3 herramientas/mando.py leer -o copia.json  # ver y guardar lo que tiene grabado
-python3 herramientas/mando.py escribir            # grabar el mapeo de Chispa y comprobarlo
+python3 herramientas/mando.py escribir            # grabar el mapeo de Mapachsynthesizer y comprobarlo
 python3 herramientas/mando.py probar              # ver en vivo qué manda cada control (Ctrl+C)
 ```
 
@@ -135,8 +135,8 @@ Sin modificadores, y las 3 capas iguales:
 | P2 izquierda / derecha / pulsar | Num `8` / `9` / `0` |
 | P3 izquierda / derecha / pulsar | Num `/` / `*` / `-` |
 
-> **Ojo:** con Chispa cerrada, en Fedora/GNOME las teclas 8–11 (`F20`–`F23`) pueden silenciar el
-> micrófono o activar y desactivar el touchpad. Con Chispa abierta no pasa, porque la app coge el
+> **Ojo:** con Mapachsynthesizer cerrada, en Fedora/GNOME las teclas 8–11 (`F20`–`F23`) pueden silenciar el
+> micrófono o activar y desactivar el touchpad. Con Mapachsynthesizer abierta no pasa, porque la app coge el
 > mando en exclusiva.
 
 ## Cómo lo lee la app
@@ -149,7 +149,7 @@ Sin modificadores, y las 3 capas iguales:
 3. **Asistente "Aprender mando"** (la primera vez o desde el modo papá). La pantalla pide
    *"pulsa la tecla roja"*, *"gira la perilla 1 a la derecha"*… y guarda el resultado en
    `mando.ron`. Si un código se repite, avisa.
-4. **Permisos:** la regla [`config/70-chispa-mando.rules`](../config/70-chispa-mando.rules) da acceso
+4. **Permisos:** la regla [`config/70-mapachsynthesizer-mando.rules`](../config/70-mapachsynthesizer-mando.rules) da acceso
    sin `sudo` al mando (`514c:8850`), tanto para leerlo (`input`) como para programarlo (`hidraw`).
    Ya está instalada en este ordenador.
 5. Si se desconecta el mando, la app sigue funcionando con el teclado normal y lo vuelve a coger

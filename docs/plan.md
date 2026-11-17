@@ -1,6 +1,4 @@
-# Plan: **Chispa**, un sintetizador para niños en Rust
-
-> "Chispa" es un nombre provisional. Se puede cambiar.
+# Plan: **Mapachsynthesizer**, un sintetizador para niños en Rust
 
 Inspirado en el [HiChord](https://updater.hichord.shop/manual/) (interfaz y forma de tocar) y en el
 [M-VAVE FM-1](https://synthanatomy.com/2026/07/m-vave-fm-1-review-low-budget-pocket-fm-ynthesizer-with-iconic-sounds.html)
@@ -38,7 +36,7 @@ y los bocetos en [bocetos/](bocetos/README.md).
 El teclado imita los controles del HiChord. Ver el boceto
 [mapa-teclado.svg](bocetos/mapa-teclado.svg).
 
-| Tecla(s) | HiChord | Función en Chispa |
+| Tecla(s) | HiChord | Función en Mapachsynthesizer |
 |---|---|---|
 | `A S D F G H J` | Botones 1–7 | Tocar los acordes I–vii (en modo batería: 7 golpes) |
 | `Q W E R T Y U` | (extra) | Los mismos acordes una octava más aguda. En modo Lead, las notas de la escala |
@@ -115,7 +113,7 @@ Hay un **limitador** fijo al final de la cadena.
 ### 3.6 Taller de samples (gestión y distorsión)
 - **Biblioteca**: lista de tarjetas grandes con el color y la forma de onda de cada sample.
 - **Grabar con el micro** (hasta 10 s), con detección de tono y transposición a Do.
-- **Importar** WAV/MP3/OGG/FLAC desde una carpeta vigilada (`~/Música/Chispa/Importar`),
+- **Importar** WAV/MP3/OGG/FLAC desde una carpeta vigilada (`~/Música/Mapachsynthesizer/Importar`),
   sin diálogos de ficheros.
 - **Editar**: recortar el inicio y el final con flechas o perilla, normalizar y fundidos.
 - **Destrozar** (cada efecto es un botón grande y se puede deshacer):
@@ -127,7 +125,7 @@ Hay un **limitador** fijo al final de la cadena.
 - Cada canción recibe un nombre divertido generado solo ("Dragón Naranja", "Pulpo Saltarín") y
   un color. Se puede renombrar en el modo papá.
 - **Exportar** a **OGG**, **MP3** o **WAV** con un solo botón. El resultado va a
-  `~/Música/Chispa/Exportadas/`. Se renderiza más rápido que el tiempo real.
+  `~/Música/Mapachsynthesizer/Exportadas/`. Se renderiza más rápido que el tiempo real.
 - 4 presets rápidos (F1–F4), como P1–P4 del HiChord.
 
 ### 3.8 Extras (si da tiempo)
@@ -144,29 +142,29 @@ Hay un **limitador** fijo al final de la cadena.
 Workspace de Cargo con crates pequeños y testeables:
 
 ```
-chispa/
+mapachsynthesizer/
 ├── crates/
-│   ├── chispa-theory/   # escalas, acordes, modificadores, voice leading (sin audio, 100% tests)
-│   ├── chispa-dsp/      # osciladores, FM, sampler, filtros, envolventes, efectos, limitador
-│   ├── chispa-engine/   # voces, mezclador, reloj/tempo, arp, secuenciador, looper, hilo de audio
-│   ├── chispa-samples/  # biblioteca, importación (symphonia), micro, edición y "destrozar"
-│   ├── chispa-project/  # modelo de canción, guardado (serde/ron), render offline y export WAV/OGG/MP3
-│   ├── chispa-input/    # teclado + perilla (evdev) → Acciones; mapa configurable
-│   └── chispa-app/      # UI (eframe/egui), pantallas, estado, modo kiosco
+│   ├── mapach-theory/   # escalas, acordes, modificadores, voice leading (sin audio, 100% tests)
+│   ├── mapach-dsp/      # osciladores, FM, sampler, filtros, envolventes, efectos, limitador
+│   ├── mapach-engine/   # voces, mezclador, reloj/tempo, arp, secuenciador, looper, hilo de audio
+│   ├── mapach-samples/  # biblioteca, importación (symphonia), micro, edición y "destrozar"
+│   ├── mapach-project/  # modelo de canción, guardado (serde/ron), render offline y export WAV/OGG/MP3
+│   ├── mapach-input/    # teclado + perilla (evdev) → Acciones; mapa configurable
+│   └── mapach-app/      # UI (eframe/egui), pantallas, estado, modo kiosco
 ├── assets/              # samples de serie, presets de sonidos, kits, ritmos, fuentes
 └── docs/
 ```
 
 ```mermaid
 flowchart LR
-    KB[Teclado] --> IN[chispa-input]
+    KB[Teclado] --> IN[mapach-input]
     KNOB[Perilla<br/>evdev] --> IN
-    IN -- Acciones --> APP[chispa-app<br/>estado + UI egui]
-    APP -- Comandos<br/>rtrb, sin bloqueo --> ENG[chispa-engine<br/>hilo de audio cpal]
+    IN -- Acciones --> APP[mapach-app<br/>estado + UI egui]
+    APP -- Comandos<br/>rtrb, sin bloqueo --> ENG[mapach-engine<br/>hilo de audio cpal]
     ENG -- Estado: nivel, paso,<br/>osciloscopio<br/>triple buffer --> APP
-    ENG --> DSP[chispa-dsp]
-    APP --> PRJ[chispa-project<br/>guardar / exportar]
-    APP --> SMP[chispa-samples]
+    ENG --> DSP[mapach-dsp]
+    APP --> PRJ[mapach-project<br/>guardar / exportar]
+    APP --> SMP[mapach-samples]
     SMP -- buffers Arc --> ENG
     PRJ -- render offline --> DSP
     ENG --> OUT[(Altavoces)]
@@ -184,7 +182,7 @@ flowchart LR
   y el audio exportado es idéntico al que se oyó.
 - El looper reserva memoria al arrancar: 6 pistas × 30 s × 48 kHz × estéreo ≈ 70 MB.
 
-### Formato de proyecto (`.chispa`, carpeta)
+### Formato de proyecto (`.mapach`, carpeta)
 ```
 Dragón Naranja/
 ├── cancion.ron      # tonalidad, tempo, sonido, efectos, patrones, presets, mezcla
@@ -201,7 +199,7 @@ Cada fase termina con algo que el niño ya puede tocar.
 | Fase | Contenido | Resultado jugable |
 |---|---|---|
 | **0. Esqueleto** | Workspace, `cpal`, ventana `egui` a pantalla completa, `A` toca un seno | "¡Suena!" |
-| **1. Acordes** | `chispa-theory` con las tablas de fm1-chord ([investigación §6.1](investigacion.md#61-fm1-chord-un-hichord-dentro-del-fm-1)), 7 acordes, flechas como modificadores, 1 sinte analógico con ADSR, pantalla principal con la leyenda de las teclas en reposo | Tocar acordes de colores |
+| **1. Acordes** | `mapach-theory` con las tablas de fm1-chord ([investigación §6.1](investigacion.md#61-fm1-chord-un-hichord-dentro-del-fm-1)), 7 acordes, flechas como modificadores, 1 sinte analógico con ADSR, pantalla principal con la leyenda de las teclas en reposo | Tocar acordes de colores |
 | **2. Menús y mando** | Menús gris/amarillo/rojo, tonalidades, octava, `evdev` con el mando de 16 teclas y 3 perillas, asistente "Aprender mando", volumen, tempo y filtro | Cambiar tono y sonido con la perilla |
 | **3. Sonidos** | Motores FM, wavetable, ruido y sampler básico, 24 presets | Muchos instrumentos |
 | **4. Tempo y modos** | Reloj, tap tempo, Rasgueo, Arpegio, Repetir, Zumbido, Melodía | Música que se mueve sola |
@@ -210,12 +208,12 @@ Cada fase termina con algo que el niño ya puede tocar.
 | **7. Looper** | 6 pistas, sincronía, mezclador y auto-grabado de patrones | Componer capas |
 | **8. Taller de samples** | Micro, importación, edición y destrozar | Su propia voz como instrumento |
 | **9. Canciones** | Autoguardado, proyectos, export WAV/OGG/MP3 | Guardar y compartir con la familia |
-| **10. Pulido** | Aleatorio, juegos, animaciones, ideas de Rainbow mode ([investigación §6.4](investigacion.md#64-qué-podríamos-llevar-a-chispa), puntos 3–7), modo kiosco y arranque automático, paquete `.rpm` / Flatpak | Producto terminado |
+| **10. Pulido** | Aleatorio, juegos, animaciones, ideas de Rainbow mode ([investigación §6.4](investigacion.md#64-qué-podríamos-llevar-a-mapachsynthesizer), puntos 3–7), modo kiosco y arranque automático, paquetes `.deb` (Debian/Ubuntu) y `.rpm` (Fedora) publicados en cada release de GitHub | Producto terminado |
 
 Orden de prioridad si hay que recortar: 0 → 1 → 2 → 4 → 6 → 7 → 9 → 3 → 5 → 8 → 10.
 
 ### Calidad
-- Tests unitarios en `chispa-theory` (cada acorde y modificador) y en `chispa-dsp`
+- Tests unitarios en `mapach-theory` (cada acorde y modificador) y en `mapach-dsp`
   (sin NaN, sin clipping después del limitador, estabilidad de filtros).
 - Tests *golden* de render: un proyecto de ejemplo se renderiza y se compara su hash/espectro.
 - `cargo clippy -D warnings` y `cargo fmt` en CI (GitHub Actions).
@@ -248,13 +246,21 @@ Fuente: **Fredoka** (OFL, redondeada y muy legible), incluida en el binario.
 
 ## 7. Preguntas abiertas
 
-1. **¿Cuántos años tiene tu hijo?** En el mensaje faltaba la edad. Con menos de 6 años conviene
-   usar iconos en lugar de texto y quitar los nombres de los acordes. Con 8 o más se pueden
-   enseñar nombres de acordes y notas. El plan admite las dos cosas con un ajuste de "nivel".
+1. ~~¿Cuántos años tiene tu hijo?~~ Resuelto: tiene **10 años**. La pantalla mostrará **colores e
+   iconos**, sin nombres de acordes ni de notas. El ajuste de "nivel" puede seguir existiendo
+   para enseñarlos más adelante.
 2. ~~¿Qué teclado vais a comprar?~~ Resuelto: macropad de 16 teclas y 3 perillas, ver [mando.md](mando.md).
-   Cuando llegue, hay que mirar su `lsusb` y los códigos que envía de fábrica.
-3. **¿En qué ordenador va a correr?** Si es un equipo antiguo o una Raspberry Pi, bajo la
-   polifonía y la calidad de la reverb.
-4. **¿Nombre definitivo?** "Chispa" es provisional.
+   Ya llegó y está programado y probado (17-11-2026).
+3. ~~¿En qué ordenador va a correr?~~ Resuelto: un **Ubuntu con 8 GB de RAM**. La memoria sobra,
+   así que se mantienen la polifonía y la reverb previstas. Consecuencias:
+   - Cada release publica dos paquetes: **`.deb`** para Debian/Ubuntu y **`.rpm`** para Fedora,
+     generados en GitHub Actions con `cargo-deb` y `cargo-generate-rpm`. Los dos instalan también la
+     regla udev del mando. Flatpak no conviene, porque complica el acceso al mando por `evdev`.
+   - En ese equipo hay que instalar la regla [`config/70-mapachsynthesizer-mando.rules`](../config/70-mapachsynthesizer-mando.rules).
+     El mando ya está programado y no hay que repetirlo.
+   - Falta saber la versión de Ubuntu y la CPU. `cpal` funciona igual con PipeWire (Ubuntu 22.10
+     y posteriores) y con PulseAudio (22.04), pero la latencia hay que medirla allí.
+4. ~~¿Nombre definitivo?~~ Resuelto: **Mapachsynthesizer**. Por dentro: `mapachsynthesizer` para el
+   programa, el paquete y el repositorio, y el prefijo `mapach-` para los crates.
 5. **¿Samples de serie?** Propongo grabar o usar samples con licencia libre (CC0) para no tener
    problemas de derechos.

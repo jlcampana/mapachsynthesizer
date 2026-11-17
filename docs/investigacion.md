@@ -159,10 +159,10 @@ alternativos ([The Firmware Hub](https://thefirmwarehub.com/) lista más de 30).
 queremos hacer: **fm1-chord**, que convierte el FM-1 en un HiChord, y **Rainbow mode**, un juguete
 musical para niños pequeños.
 
-> **Licencias:** si copiamos código de estos proyectos, Chispa tendría que ser GPL-3.0. Las tablas
+> **Licencias:** si copiamos código de estos proyectos, Mapachsynthesizer tendría que ser GPL-3.0. Las tablas
 > musicales (escalas, intervalos, qué hace cada dirección) son datos que podemos reescribir en Rust.
 > fm1-chord avisa de que el fabricante del HiChord dice tener una **patente en trámite** sobre la
-> asignación de acordes. Para un proyecto privado no importa. Si algún día publicamos Chispa,
+> asignación de acordes. Para un proyecto privado no importa. Si algún día publicamos Mapachsynthesizer,
 > conviene usar nombres propios y citar los precedentes: Omnichord, Suzuki QChord y Casio Chordana.
 
 ### 6.1 fm1-chord: un HiChord dentro del FM-1
@@ -172,7 +172,7 @@ Fuente: [math0ne/fm1-chord](https://github.com/math0ne/fm1-chord) (GPL-3.0). Lo 
 
 Es una reimplementación del HiChord hecha solo a partir de manuales públicos y del protocolo de su
 app. Trae las **tablas completas del motor de acordes**, y eso es justo lo que necesitamos para la
-fase 1 de Chispa:
+fase 1 de Mapachsynthesizer:
 
 - **10 escalas** con sus grados, y el acorde por defecto de cada tecla en cada escala. En la mayor:
   I mayor, ii menor, iii menor, IV mayor, V mayor, vi menor y vii disminuido. Con las pentatónicas
@@ -282,7 +282,7 @@ Está diseñado para niños que todavía no leen, y de él hay mucho que aprende
   - *Fart Machine One*, que hace exactamente lo que dice su nombre. Seguramente sería el más
     popular entre los niños.
 
-### 6.4 Qué podríamos llevar a Chispa
+### 6.4 Qué podríamos llevar a Mapachsynthesizer
 
 **Ya, en la fase 1**, de fm1-chord:
 

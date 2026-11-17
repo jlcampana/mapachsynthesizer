@@ -5,10 +5,10 @@ Sin dependencias: habla directamente con /dev/hidraw* y /dev/input/event*.
 Protocolo tomado de https://github.com/elmitash/macropad-16key-3knob (MIT).
 
     python3 herramientas/mando.py leer [-o copia.json]   # copia de seguridad de las 3 capas
-    python3 herramientas/mando.py escribir               # graba el mapeo de Chispa en las 3 capas
+    python3 herramientas/mando.py escribir               # graba el mapeo de Mapachsynthesizer en las 3 capas
     python3 herramientas/mando.py probar                 # muestra en vivo lo que manda cada control
 
-Necesita permisos sobre el mando: instalar config/70-chispa-mando.rules (ver docs/mando.md).
+Necesita permisos sobre el mando: instalar config/70-mapachsynthesizer-mando.rules (ver docs/mando.md).
 """
 
 import argparse
@@ -28,7 +28,7 @@ SLOTS = 25  # 16 teclas + 3 perillas × (izquierda, pulsar, derecha)
 
 KIND_TECLADO, KIND_MULTIMEDIA, KIND_RATON = 1, 2, 3
 
-# Códigos de uso HID (página de teclado) del mapeo de Chispa.
+# Códigos de uso HID (página de teclado) del mapeo de Mapachsynthesizer.
 F13 = 0x68  # F13..F24 = 0x68..0x73
 KP = {"/": 0x54, "*": 0x55, "-": 0x56, "1": 0x59, "2": 0x5A, "3": 0x5B, "4": 0x5C,
       "5": 0x5D, "6": 0x5E, "7": 0x5F, "8": 0x60, "9": 0x61, "0": 0x62}
@@ -87,7 +87,7 @@ def abrir_hid():
     try:
         return os.open(ruta, os.O_RDWR)
     except PermissionError:
-        fallo(f"sin permiso para abrir {ruta}. Instala config/70-chispa-mando.rules "
+        fallo(f"sin permiso para abrir {ruta}. Instala config/70-mapachsynthesizer-mando.rules "
               "(ver docs/mando.md) o ejecuta con sudo.")
 
 
@@ -186,7 +186,7 @@ def cmd_escribir(args):
     os.close(fd)
     if errores:
         fallo(f"{errores} ranuras no coinciden")
-    print("Hecho: las 3 capas tienen el mapeo de Chispa.")
+    print("Hecho: las 3 capas tienen el mapeo de Mapachsynthesizer.")
 
 
 def cmd_probar(args):
@@ -198,7 +198,7 @@ def cmd_probar(args):
         try:
             fd = os.open(r, os.O_RDONLY)
         except PermissionError:
-            fallo(f"sin permiso para leer {r}. Instala config/70-chispa-mando.rules o usa sudo.")
+            fallo(f"sin permiso para leer {r}. Instala config/70-mapachsynthesizer-mando.rules o usa sudo.")
         fcntl.ioctl(fd, 0x40044590, 1)  # EVIOCGRAB: que no llegue al escritorio
         fds[fd] = r
     print("Pulsa teclas y gira o pulsa perillas. Ctrl+C para salir.")
@@ -224,7 +224,7 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
     leer = sub.add_parser("leer", help="lee y muestra la configuración de las 3 capas")
     leer.add_argument("-o", "--salida", help="guardar también en JSON")
-    sub.add_parser("escribir", help="graba el mapeo de Chispa en las 3 capas")
+    sub.add_parser("escribir", help="graba el mapeo de Mapachsynthesizer en las 3 capas")
     sub.add_parser("probar", help="muestra en vivo lo que manda cada control")
     args = p.parse_args()
     {"leer": cmd_leer, "escribir": cmd_escribir, "probar": cmd_probar}[args.cmd](args)
