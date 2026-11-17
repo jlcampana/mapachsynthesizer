@@ -258,8 +258,13 @@ Fuente: **Fredoka** (OFL, redondeada y muy legible), incluida en el binario.
      regla udev del mando. Flatpak no conviene, porque complica el acceso al mando por `evdev`.
    - En ese equipo hay que instalar la regla [`config/70-mapachsynthesizer-mando.rules`](../config/70-mapachsynthesizer-mando.rules).
      El mando ya está programado y no hay que repetirlo.
-   - Falta saber la versión de Ubuntu y la CPU. `cpal` funciona igual con PipeWire (Ubuntu 22.10
-     y posteriores) y con PulseAudio (22.04), pero la latencia hay que medirla allí.
+   - El equipo es un **Lenovo ThinkCentre con AMD Ryzen 5 PRO** (de segunda mano). Va sobrado de
+     CPU para síntesis en tiempo real.
+   - Lleva **la versión de Ubuntu anterior a la última**, que puede ser 26.04 LTS o 24.04 LTS (falta
+     confirmarlo con `lsb_release -a`). Las dos usan PipeWire, así que el audio funciona igual.
+     Lo que importa es que los paquetes se compilen contra la glibc más antigua que soportemos:
+     el `.deb` se generará en **Ubuntu 24.04** para que funcione en las dos.
+   - La latencia hay que medirla allí.
 4. ~~¿Nombre definitivo?~~ Resuelto: **Mapachsynthesizer**. Por dentro: `mapachsynthesizer` para el
    programa, el paquete y el repositorio, y el prefijo `mapach-` para los crates.
 5. **¿Samples de serie?** Propongo grabar o usar samples con licencia libre (CC0) para no tener

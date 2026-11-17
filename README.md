@@ -34,7 +34,8 @@ Después viene la **fase 1 (acordes)**, con `mapach-theory` hecho a partir de la
 fm1-chord ([investigación §6.1](docs/investigacion.md#61-fm1-chord-un-hichord-dentro-del-fm-1)).
 Además, adelantaremos la lectura del mando por `evdev` de la fase 2 en cuanto haya sonido.
 
-Queda por saber la versión de Ubuntu y el procesador del ordenador de destino.
+Ordenador de destino: ThinkCentre con Ryzen 5 PRO, 8 GB y la penúltima versión de Ubuntu (ver
+[plan, pregunta 3](docs/plan.md#7-preguntas-abiertas)).
 
 ### Documentos
 
