@@ -17,25 +17,46 @@ Con él se puede:
 
 ## Estado
 
-📝 **Diseño terminado.** Todavía no hay código. El mando ya está programado y probado.
+🎹 **Ya se puede tocar.** Están hechas las fases 0, 1, 2 y 4 del [plan](docs/plan.md#5-fases-y-entregables):
 
-### Siguiente paso: fase 0, el esqueleto
+- Los 7 acordes de colores con voice leading, las flechas y la perilla mágica para cambiarles el
+  color, y la fila `Q`…`U` una octava más aguda.
+- Menús gris (tono), amarillo (sonido) y rojo (modo). Se abren al pulsar y soltar; si se mantienen,
+  hacen atajos con las flechas y las perillas, y con `Espacio` ponen valores al azar 🎲.
+- 8 sonidos de analógico virtual, con ataque, release y brillo.
+- Modos Tocar, Rasgueo, Arpegio (6 patrones), Repetir, Zumbido y Melodía, con tempo y tap tempo (`B`).
+- El mando de 16 teclas y 3 perillas, leído por `evdev` en exclusiva.
+- Limitador a −12 dBFS al final de todo y ajustes que se guardan solos.
+- Modo papá (`Ctrl+Alt+P`), el único sitio desde donde se sale (`Q`).
 
-Según el [plan](docs/plan.md#5-fases-y-entregables):
+**Falta:** el asistente "Aprender mando", batería, looper, canciones y exportar, más motores de
+sonido, efectos, taller de samples y paquetes.
 
-1. Crear el workspace de Rust con el crate `mapach-app`.
-2. Abrir una ventana `egui` a pantalla completa.
-3. Sacar sonido con `cpal`: al pulsar `A` suena una onda senoidal.
-4. Medir la latencia en este ordenador y, más adelante, en el Ubuntu de destino.
+## Compilar y tocar
 
-**Terminada cuando:** al pulsar `A`, suena enseguida y sin cortes.
+Hace falta Rust (1.88 o más nuevo) y las cabeceras de ALSA:
 
-Después viene la **fase 1 (acordes)**, con `mapach-theory` hecho a partir de las tablas de
-fm1-chord ([investigación §6.1](docs/investigacion.md#61-fm1-chord-un-hichord-dentro-del-fm-1)).
-Además, adelantaremos la lectura del mando por `evdev` de la fase 2 en cuanto haya sonido.
+```bash
+sudo dnf install alsa-lib-devel          # Fedora
+sudo apt install libasound2-dev          # Ubuntu / Debian
 
-Ordenador de destino: ThinkCentre con Ryzen 5 PRO, 8 GB y la penúltima versión de Ubuntu (ver
-[plan, pregunta 3](docs/plan.md#7-preguntas-abiertas)).
+cargo run --release -p mapach-app                # pantalla completa
+cargo run --release -p mapach-app -- --ventana   # en una ventana
+```
+
+| Tecla | Qué hace |
+|---|---|
+| `A S D F G H J` | Acordes (`Q`…`U`, una octava más aguda) |
+| Flechas | Mientras suena un acorde, cambian su color |
+| `Z` `X` `C` | Menús de tono, sonido y modo |
+| `RePág` / `AvPág` | Volumen (perilla 1) |
+| Rueda del ratón | Perilla mágica (2) |
+| `-` / `+` | Tempo (perilla 3) |
+| `B` | Tap tempo |
+| `Ctrl+Alt+P` | Modo papá (salir con `Q`) |
+
+Para depurar sin sonido: `mapach-app --ventana --captura salida.ppm --demo 1` guarda una captura
+de la pantalla (escenas 0–6).
 
 ### Documentos
 
