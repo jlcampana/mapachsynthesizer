@@ -3,6 +3,7 @@
 //! Todo trabaja muestra a muestra, sin reservar memoria después de construirse, para poder
 //! usarse en el hilo de audio.
 
+pub mod drums;
 pub mod envelope;
 pub mod filter;
 pub mod limiter;
