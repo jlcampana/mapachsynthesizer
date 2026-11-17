@@ -6,6 +6,7 @@
 
 pub mod audio;
 pub mod drums;
+pub mod looper;
 mod patch;
 pub mod performer;
 mod voice;
@@ -14,6 +15,7 @@ pub use patch::{Patch, SOUNDS, Sound};
 pub use performer::{ARP_PATTERNS, MAX_CHORD, RATES, STRUM_MS, Style};
 
 use drums::{DrumMachine, Pattern};
+use looper::{Looper, LooperStatus};
 use performer::{Out, Performer};
 
 use mapach_dsp::{AdsrParams, Limiter, Smoothed, db_to_gain};
@@ -75,6 +77,13 @@ pub enum Command {
     SetPattern(Pattern),
     /// Arranca o para la caja de ritmos.
     DrumsPlay(bool),
+    /// Empieza o termina de grabar una pista del looper (0–5).
+    LoopRecord(u8),
+    /// Reproduce o para el looper.
+    LoopPlay(bool),
+    LoopClear(u8),
+    LoopMute(u8, bool),
+    LoopVolume(u8, f32),
 }
 
 impl Command {
@@ -144,6 +153,7 @@ pub struct Engine {
     limiter: Limiter,
     performer: Performer,
     drums: DrumMachine,
+    looper: Looper,
     bpm: f32,
     /// Contador para saber qué voz es la más vieja.
     clock: u64,
@@ -163,6 +173,7 @@ impl Engine {
             limiter: Limiter::new(db_to_gain(DEFAULT_MAX_DB), 0.15, sample_rate),
             performer: Performer::new(sample_rate),
             drums: DrumMachine::new(sample_rate),
+            looper: Looper::new(sample_rate),
             bpm: 120.0,
             clock: 0,
             peak: 0.0,
@@ -234,6 +245,14 @@ impl Engine {
             Command::SetKit(k) => self.drums.set_kit(k as usize),
             Command::SetPattern(p) => self.drums.set_pattern(p),
             Command::DrumsPlay(on) => self.drums.set_playing(on),
+            Command::LoopRecord(t) => {
+                let bpm = self.drums.is_playing().then_some(self.bpm);
+                self.looper.toggle_record(t as usize, bpm);
+            }
+            Command::LoopPlay(on) => self.looper.set_playing(on),
+            Command::LoopClear(t) => self.looper.clear(t as usize),
+            Command::LoopMute(t, m) => self.looper.set_muted(t as usize, m),
+            Command::LoopVolume(t, v) => self.looper.set_volume(t as usize, v),
             Command::SetPatch(p) => {
                 self.patch = p;
                 self.env = p.env;
@@ -296,6 +315,10 @@ impl Engine {
         self.drums.step()
     }
 
+    pub fn looper_status(&self) -> LooperStatus {
+        self.looper.status()
+    }
+
     /// Número de voces que están sonando.
     pub fn active_voices(&self) -> usize {
         self.voices.iter().filter(|v| v.is_active()).count()
@@ -323,6 +346,8 @@ impl Engine {
                 v.render(block, &self.patch, &self.env, cutoff, self.sample_rate);
             }
             self.drums.render(block, self.bpm);
+            let bpm = self.drums.is_playing().then_some(self.bpm);
+            self.looper.process(block, bpm);
             start += n;
         }
 

@@ -4,12 +4,13 @@
 //! Las órdenes llegan por un ring buffer `rtrb` y las medidas salen por atómicos.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use anyhow::{Context, Result, anyhow};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{BufferSize, FromSample, SampleFormat, SizedSample, StreamConfig};
 
+use crate::looper::LooperStatus;
 use crate::{Command, Engine};
 
 /// Tamaño de bloque pedido a la tarjeta: 256 muestras a 48 kHz ≈ 5,3 ms.
@@ -31,6 +32,8 @@ pub struct AudioStats {
     pub voices: AtomicU32,
     /// Paso de la caja de ritmos + 1 (0 = parada).
     pub drum_step: AtomicU32,
+    /// Estado del looper empaquetado ([`LooperStatus::pack`]).
+    pub looper: AtomicU64,
 }
 
 /// Una salida de audio en marcha. Mientras exista, suena.
@@ -66,6 +69,10 @@ impl AudioOutput {
             0 => None,
             n => Some(n as usize - 1),
         }
+    }
+
+    pub fn looper(&self) -> LooperStatus {
+        LooperStatus::unpack(self.stats.looper.load(Ordering::Relaxed))
     }
 
     /// Voces sonando.
@@ -192,6 +199,9 @@ where
                 }
             }
             stats_cb.peak_bits.store(peak.to_bits(), Ordering::Relaxed);
+            stats_cb
+                .looper
+                .store(engine.looper_status().pack(), Ordering::Relaxed);
             stats_cb.drum_step.store(
                 engine.drum_step().map_or(0, |s| s as u32 + 1),
                 Ordering::Relaxed,
