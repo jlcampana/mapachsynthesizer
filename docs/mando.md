@@ -7,8 +7,8 @@
 - 3 capas con indicador LED, RGB, base de silicona antideslizante.
 - Cable USB-C, Bluetooth y 2,4 GHz. En inalámbrico apaga las luces.
 - El fabricante lo configura con un programa de Windows y la configuración queda guardada en el
-  teclado. **No tenemos Windows**, así que lo haremos desde Linux (ver
-  [Configuración sin Windows](#configuración-sin-windows)).
+  teclado. **No tenemos Windows**, así que lo programamos desde Linux (ver
+  [Configuración sin Windows](#configuración-sin-windows-)).
 - Un comprador lo usa en Photoshop con las perillas para zoom y tamaño de pincel. Eso confirma
   que las perillas pueden mandar cualquier tecla, no solo el volumen.
 
@@ -19,7 +19,7 @@ que es como lo hace el HiChord.
 
 ![Mapa del mando](bocetos/mando-16-teclas.svg)
 
-> La posición exacta de las perillas se confirmará cuando llegue. El boceto las pone arriba.
+> Confirmado con el mando real: las perillas están arriba, como en el boceto.
 
 ---
 
@@ -85,63 +85,49 @@ para el taller de samples.
 
 ---
 
-## Configuración sin Windows
+## Configuración sin Windows ✅
 
-La app lee el mando por su cuenta (ver abajo), así que **solo necesita que cada tecla y cada
-acción de perilla mande un código distinto**: 16 + 9 = 25 códigos. Puede que no haga falta
-configurar nada.
+**Hecho el 17-11-2026.** El mando está programado y comprobado.
 
-### Paso 1: ver qué manda de fábrica (al llegar)
+### Lo que encontramos al conectarlo
 
-Conectarlo **por cable** y ejecutar:
+- **ID USB `514c:8850`**, no `1189:8890` como esperábamos. Por eso `ch57x-keyboard-tool` **no sirve**:
+  este chip usa otro protocolo.
+- Aparece como **dos interfaces**: la 0 es la de configuración (`hidraw`, informe 3 de 64 bytes) y
+  la 1 crea dos dispositivos de entrada, "Keyboard" y "Mouse".
+- **De fábrica** las 25 acciones mandaban las letras `a`…`y`, una distinta cada una. Se guardaron en
+  [`config/mando-fabrica.json`](../config/mando-fabrica.json) por si hay que volver a ellas.
+- **Las perillas están arriba.** El firmware numera las teclas **por columnas, de abajo arriba**
+  (la ranura 1 es la de abajo a la izquierda). La herramienta lo traduce para que la tecla 1 sea
+  la de arriba a la izquierda, como en las tablas de arriba.
+- Cada perilla manda 3 códigos distintos: girar a la izquierda, girar a la derecha y pulsar.
+  Un clic de giro manda una pulsación. Ojo: en el firmware cada perilla va en el orden
+  **derecha, pulsar, izquierda** (al revés de lo que dice la herramienta de la que sale el
+  protocolo). Comprobado girando cada perilla.
 
-```bash
-lsusb                 # anotar el ID, p. ej. 1189:8890
-sudo dnf install evtest
-sudo evtest           # elegir el mando y pulsar cada tecla y girar/pulsar cada perilla
-```
+### Cómo se programa
 
-- **Si los 25 códigos son distintos:** no hay que configurar nada. La app los aprende con el
-  asistente "Aprender mando". **Hecho.**
-- **Si se repiten** (por ejemplo, las 3 perillas mandan volumen): seguir al paso 2.
-
-Ojo: un mando puede aparecer como **varios dispositivos** en `evtest`, normalmente uno para el
-teclado y otro para las teclas multimedia. La app los abrirá todos.
-
-### Paso 2: programarlo desde Linux con `ch57x-keyboard-tool`
-
-[`ch57x-keyboard-tool`](https://github.com/kriomant/ch57x-keyboard-tool) es un programa de línea
-de comandos en Rust que programa estos mandos chinos con chip CH57x, que es casi seguro el de este.
-
-- **IDs admitidos:** `1189:8890`, `1189:8840` y `1189:8842`. Si `lsusb` da uno de estos, es muy
-  probable que funcione.
-- **Modelos probados:** 3×4, 3×3, 3×2, 3×1 y 4×1, y en las fotos aparecen 4×3 y 5×3 con 3 perillas.
-  El de 4×4 con 3 perillas **no está en la lista**, pero si el ID coincide lo normal es que sí funcione.
+[`herramientas/mando.py`](../herramientas/mando.py) no necesita nada instalado: solo Python y la
+regla udev. El protocolo sale de [macropad-16key-3knob](https://github.com/elmitash/macropad-16key-3knob)
+(MIT).
 
 ```bash
-cargo install ch57x-keyboard-tool
-ch57x-keyboard-tool show-keys            # nombres de tecla admitidos (¿hay F13–F24?)
-ch57x-keyboard-tool validate < config/mando.yaml
-sudo ch57x-keyboard-tool upload < config/mando.yaml
+# Una vez: permisos para usar el mando sin sudo (después, desenchufar y enchufar)
+sudo cp config/70-chispa-mando.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+
+python3 herramientas/mando.py leer -o copia.json  # ver y guardar lo que tiene grabado
+python3 herramientas/mando.py escribir            # grabar el mapeo de Chispa y comprobarlo
+python3 herramientas/mando.py probar              # ver en vivo qué manda cada control (Ctrl+C)
 ```
 
-El fichero `config/mando.yaml` se preparará cuando sepamos el ID y los nombres de tecla
-que admite. La configuración se guarda en el mando y no hay que repetirla.
+La configuración se guarda en el mando: no hay que repetirla en otros ordenadores.
 
-### Paso 3 (plan B): Windows en una máquina virtual
+### Códigos grabados
 
-Solo si el paso 2 no funciona:
-- Instalar `virt-manager` (está en Fedora) y la **ISO de evaluación gratuita de Windows** de Microsoft.
-- Pasar el USB del mando a la máquina virtual y usar allí el programa del fabricante, una sola vez.
-- Después se borra la máquina virtual.
+Sin modificadores, y las 3 capas iguales:
 
-También vale pedir prestado un PC con Windows durante 10 minutos.
-
-### Códigos propuestos
-
-Sin modificadores, para que cada acción sea un solo evento:
-
-| Control | Código propuesto |
+| Control | Código |
 |---|---|
 | Teclas 1–12 | `F13` … `F24` |
 | Teclas 13–16 | Teclado numérico `1` `2` `3` `4` |
@@ -149,10 +135,9 @@ Sin modificadores, para que cada acción sea un solo evento:
 | P2 izquierda / derecha / pulsar | Num `8` / `9` / `0` |
 | P3 izquierda / derecha / pulsar | Num `/` / `*` / `-` |
 
-Si la herramienta no admite F13–F24, vale **cualquier** combinación de 25 teclas distintas
-(letras incluidas). El asistente de la app las aprende igual.
-
----
+> **Ojo:** con Chispa cerrada, en Fedora/GNOME las teclas 8–11 (`F20`–`F23`) pueden silenciar el
+> micrófono o activar y desactivar el touchpad. Con Chispa abierta no pasa, porque la app coge el
+> mando en exclusiva.
 
 ## Cómo lo lee la app
 
@@ -164,11 +149,9 @@ Si la herramienta no admite F13–F24, vale **cualquier** combinación de 25 tec
 3. **Asistente "Aprender mando"** (la primera vez o desde el modo papá). La pantalla pide
    *"pulsa la tecla roja"*, *"gira la perilla 1 a la derecha"*… y guarda el resultado en
    `mando.ron`. Si un código se repite, avisa.
-4. **Permisos:** una regla `udev` para leerlo sin `sudo`. Los ID se sacan con `lsusb`:
-   ```
-   # /etc/udev/rules.d/70-chispa-mando.rules
-   SUBSYSTEM=="input", ATTRS{idVendor}=="XXXX", ATTRS{idProduct}=="YYYY", MODE="0660", TAG+="uaccess"
-   ```
+4. **Permisos:** la regla [`config/70-chispa-mando.rules`](../config/70-chispa-mando.rules) da acceso
+   sin `sudo` al mando (`514c:8850`), tanto para leerlo (`input`) como para programarlo (`hidraw`).
+   Ya está instalada en este ordenador.
 5. Si se desconecta el mando, la app sigue funcionando con el teclado normal y lo vuelve a coger
    solo cuando se reconecta.
 
