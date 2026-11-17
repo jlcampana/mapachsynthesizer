@@ -76,7 +76,11 @@ pub enum ModifierMode {
 }
 
 impl ModifierMode {
-    pub const ALL: [ModifierMode; 3] = [ModifierMode::Basic, ModifierMode::Jazz, ModifierMode::Borrow];
+    pub const ALL: [ModifierMode; 3] = [
+        ModifierMode::Basic,
+        ModifierMode::Jazz,
+        ModifierMode::Borrow,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -151,16 +155,31 @@ mod tests {
     use ChordType::*;
     use Direction::*;
 
-    const C: Chord = Chord { root: 48, kind: Major };
-    const DM: Chord = Chord { root: 50, kind: Minor };
-    const BDIM: Chord = Chord { root: 59, kind: Dim };
+    const C: Chord = Chord {
+        root: 48,
+        kind: Major,
+    };
+    const DM: Chord = Chord {
+        root: 50,
+        kind: Minor,
+    };
+    const BDIM: Chord = Chord {
+        root: 59,
+        kind: Dim,
+    };
 
     #[test]
     fn flechas() {
-        assert_eq!(Direction::from_arrows(true, false, false, true), Some(UpRight));
+        assert_eq!(
+            Direction::from_arrows(true, false, false, true),
+            Some(UpRight)
+        );
         assert_eq!(Direction::from_arrows(true, true, false, false), None);
         assert_eq!(Direction::from_arrows(false, false, false, false), None);
-        assert_eq!(Direction::from_arrows(false, true, true, false), Some(DownLeft));
+        assert_eq!(
+            Direction::from_arrows(false, true, true, false),
+            Some(DownLeft)
+        );
     }
 
     #[test]

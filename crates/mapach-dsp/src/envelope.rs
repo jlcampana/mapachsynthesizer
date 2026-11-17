@@ -107,7 +107,11 @@ impl Adsr {
                 self.level += (s - self.level) * k.min(1.0);
                 if (self.level - s).abs() < 1e-4 {
                     self.level = s;
-                    self.stage = if s <= 0.0 { Stage::Idle } else { Stage::Sustain };
+                    self.stage = if s <= 0.0 {
+                        Stage::Idle
+                    } else {
+                        Stage::Sustain
+                    };
                 }
             }
             Stage::Sustain => {

@@ -234,9 +234,18 @@ mod tests {
 
     #[test]
     fn teclas_del_mando() {
-        assert_eq!(translate(KeyCode::KEY_F13, 1), Some(Event::Press(Control::Chord(0))));
-        assert_eq!(translate(KeyCode::KEY_F19, 0), Some(Event::Release(Control::Chord(6))));
-        assert_eq!(translate(KeyCode::KEY_KP4, 1), Some(Event::Press(Control::Play)));
+        assert_eq!(
+            translate(KeyCode::KEY_F13, 1),
+            Some(Event::Press(Control::Chord(0)))
+        );
+        assert_eq!(
+            translate(KeyCode::KEY_F19, 0),
+            Some(Event::Release(Control::Chord(6)))
+        );
+        assert_eq!(
+            translate(KeyCode::KEY_KP4, 1),
+            Some(Event::Press(Control::Play))
+        );
         assert_eq!(
             translate(KeyCode::KEY_KP1, 1),
             Some(Event::Press(Control::Menu(Menu::Tono)))
@@ -246,8 +255,14 @@ mod tests {
 
     #[test]
     fn perillas() {
-        assert_eq!(translate(KeyCode::KEY_KP6, 1), Some(Event::Turn(Knob::Volumen, 1)));
-        assert_eq!(translate(KeyCode::KEY_KP8, 1), Some(Event::Turn(Knob::Magica, -1)));
+        assert_eq!(
+            translate(KeyCode::KEY_KP6, 1),
+            Some(Event::Turn(Knob::Volumen, 1))
+        );
+        assert_eq!(
+            translate(KeyCode::KEY_KP8, 1),
+            Some(Event::Turn(Knob::Magica, -1))
+        );
         // Soltar después de un clic de giro no hace nada.
         assert_eq!(translate(KeyCode::KEY_KP6, 0), None);
         assert_eq!(

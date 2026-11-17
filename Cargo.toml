@@ -6,3 +6,9 @@ members = ["crates/*"]
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
+
+[workspace.lints.clippy]
+# Preferimos chunks_exact(2) para los buffers estéreo: se lee mejor.
+chunks_exact_to_as_chunks = "allow"
+# Los presets de sonido se escriben como una llamada con todos sus valores.
+too_many_arguments = "allow"

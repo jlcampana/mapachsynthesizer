@@ -88,7 +88,14 @@ pub fn start() -> Result<AudioOutput> {
     // Primero probamos con un bloque pequeño; si la tarjeta no quiere, usamos el de serie.
     config.buffer_size = BufferSize::Fixed(PREFERRED_BUFFER);
     match build(&device, &config, format) {
-        Ok((stream, commands, stats)) => finish(stream, commands, stats, &config, Some(PREFERRED_BUFFER), device_name),
+        Ok((stream, commands, stats)) => finish(
+            stream,
+            commands,
+            stats,
+            &config,
+            Some(PREFERRED_BUFFER),
+            device_name,
+        ),
         Err(e) => {
             eprintln!("Bloque de {PREFERRED_BUFFER} rechazado ({e}); uso el de serie");
             config.buffer_size = BufferSize::Default;
@@ -149,7 +156,9 @@ where
                 engine.handle(cmd);
             }
             let frames = data.len() / channels;
-            stats_cb.block_frames.store(frames as u32, Ordering::Relaxed);
+            stats_cb
+                .block_frames
+                .store(frames as u32, Ordering::Relaxed);
             let ts = info.timestamp();
             let lat = ts.playback.duration_since(ts.callback);
             stats_cb
@@ -162,7 +171,10 @@ where
                 let stereo = &mut scratch[..n * 2];
                 engine.process(stereo);
                 peak = peak.max(engine.peak());
-                for (frame, s) in chunk_out.chunks_exact_mut(channels).zip(stereo.chunks_exact(2)) {
+                for (frame, s) in chunk_out
+                    .chunks_exact_mut(channels)
+                    .zip(stereo.chunks_exact(2))
+                {
                     for (c, out) in frame.iter_mut().enumerate() {
                         let v = if c % 2 == 0 { s[0] } else { s[1] };
                         *out = T::from_sample(v.clamp(-1.0, 1.0));

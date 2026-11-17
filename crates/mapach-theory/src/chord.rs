@@ -54,9 +54,37 @@ impl ChordType {
     pub const ALL: [ChordType; 31] = {
         use ChordType::*;
         [
-            Major, Minor, Dim, Flat5, Aug, Sus4, Sus2, Maj7, Min7, Dom7, Maj6, Min6, Maj9, Min9,
-            Dom7Sharp9, HalfDim7, Dom9, Add9, Add11, Min11, Sus4Dom7, MinMaj7, Maj13, Six9,
-            Dom7Flat9, Dom7Alt, Maj7Sharp11, Dom13, Dim7, Power, MinorSharp5,
+            Major,
+            Minor,
+            Dim,
+            Flat5,
+            Aug,
+            Sus4,
+            Sus2,
+            Maj7,
+            Min7,
+            Dom7,
+            Maj6,
+            Min6,
+            Maj9,
+            Min9,
+            Dom7Sharp9,
+            HalfDim7,
+            Dom9,
+            Add9,
+            Add11,
+            Min11,
+            Sus4Dom7,
+            MinMaj7,
+            Maj13,
+            Six9,
+            Dom7Flat9,
+            Dom7Alt,
+            Maj7Sharp11,
+            Dom13,
+            Dim7,
+            Power,
+            MinorSharp5,
         ]
     };
 
@@ -142,7 +170,7 @@ impl ChordType {
         match self {
             Minor | Min7 | Min6 | Min9 | Min11 | MinMaj7 | Dim | HalfDim7 | Dim7 | MinorSharp5 => {
                 Family::Minor
-            },
+            }
             Dom7 | Dom9 | Dom7Sharp9 | Dom7Flat9 | Dom7Alt | Dom13 | Sus4Dom7 => Family::Dominant,
             _ => Family::Major,
         }
@@ -237,7 +265,11 @@ impl Chord {
 
     /// Notas del acorde en posición fundamental, sin voicing.
     pub fn notes(&self) -> Vec<i32> {
-        self.kind.intervals().iter().map(|i| self.root + i).collect()
+        self.kind
+            .intervals()
+            .iter()
+            .map(|i| self.root + i)
+            .collect()
     }
 
     /// Clase de altura de la raíz (0 = Do … 11 = Si).
@@ -276,7 +308,12 @@ mod tests {
 
     #[test]
     fn flip_ida_y_vuelta() {
-        for t in [ChordType::Major, ChordType::Minor, ChordType::Maj7, ChordType::Min9] {
+        for t in [
+            ChordType::Major,
+            ChordType::Minor,
+            ChordType::Maj7,
+            ChordType::Min9,
+        ] {
             assert_eq!(t.flip_major_minor().flip_major_minor(), t);
         }
     }

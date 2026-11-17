@@ -31,7 +31,7 @@ impl Smoothed {
     }
 
     #[inline]
-    pub fn next(&mut self) -> f32 {
+    pub fn tick(&mut self) -> f32 {
         self.current += (self.target - self.current) * self.coef;
         self.current
     }
@@ -45,11 +45,11 @@ mod tests {
     fn llega_al_objetivo() {
         let mut s = Smoothed::new(0.0, 0.01, 48_000.0);
         s.set(1.0);
-        let first = s.next();
+        let first = s.tick();
         assert!(first > 0.0 && first < 0.05);
         for _ in 0..48_000 {
-            s.next();
+            s.tick();
         }
-        assert!((s.next() - 1.0).abs() < 1e-4);
+        assert!((s.tick() - 1.0).abs() < 1e-4);
     }
 }

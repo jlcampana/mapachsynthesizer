@@ -135,7 +135,6 @@ pub struct OpenMenu {
     pub item: usize,
 }
 
-
 pub const BPM_MIN: f32 = 40.0;
 pub const BPM_MAX: f32 = 300.0;
 
@@ -282,7 +281,9 @@ impl State {
     pub fn selected_item(&self) -> Option<Item> {
         let o = self.open_menu?;
         let items = self.items(o.menu);
-        items.get(o.item.min(items.len().saturating_sub(1))).copied()
+        items
+            .get(o.item.min(items.len().saturating_sub(1)))
+            .copied()
     }
 
     fn effective_volume(&self) -> f32 {
@@ -302,7 +303,9 @@ impl State {
 
     /// El menú que se mantiene pulsado (si hay varios, el primero).
     pub fn menu_held(&self) -> Option<Menu> {
-        Menu::ALL.into_iter().find(|&m| self.menus_held[menu_idx(m)])
+        Menu::ALL
+            .into_iter()
+            .find(|&m| self.menus_held[menu_idx(m)])
     }
 
     pub fn arrow_held(&self, a: Arrow) -> bool {
@@ -311,7 +314,9 @@ impl State {
 
     pub fn chord_held(&self, button: u8) -> bool {
         self.held.iter().any(|&(b, _)| b == button)
-            || self.melody.iter().any(|(c, _)| matches!(c, Control::Chord(b) | Control::ChordHigh(b) if *b == button))
+            || self.melody.iter().any(
+                |(c, _)| matches!(c, Control::Chord(b) | Control::ChordHigh(b) if *b == button),
+            )
     }
 
     /// Dirección de las flechas pulsadas.
@@ -327,7 +332,9 @@ impl State {
 
     /// Acorde que tocaría la tecla `button` con la dirección actual.
     pub fn chord_for(&self, button: u8, high: bool) -> Chord {
-        let mut c = self.mod_mode.apply(self.key.chord(button as usize), self.dir());
+        let mut c = self
+            .mod_mode
+            .apply(self.key.chord(button as usize), self.dir());
         if high {
             c.root += 12;
         }
@@ -407,11 +414,9 @@ impl State {
                 out.push(Command::SetBpm(self.bpm));
             }
             // De momento, Play para el zumbido (el looper llegará en la fase 7).
-            Control::Play => {
-                if self.play_mode == PlayMode::Zumbido && self.held.is_empty() {
-                    self.current = None;
-                    out.push(Command::StopChord);
-                }
+            Control::Play if self.play_mode == PlayMode::Zumbido && self.held.is_empty() => {
+                self.current = None;
+                out.push(Command::StopChord);
             }
             _ => {}
         }
@@ -548,7 +553,11 @@ impl State {
             }
             Item::Escala => {
                 for _ in 0..d.unsigned_abs() {
-                    self.key.scale = if d > 0 { self.key.scale.next() } else { self.key.scale.prev() };
+                    self.key.scale = if d > 0 {
+                        self.key.scale.next()
+                    } else {
+                        self.key.scale.prev()
+                    };
                 }
                 self.revoice(out);
             }
@@ -559,7 +568,10 @@ impl State {
             }
             Item::Acordes => {
                 self.mod_mode = ModifierMode::ALL[wrap(
-                    ModifierMode::ALL.iter().position(|&m| m == self.mod_mode).unwrap_or(0),
+                    ModifierMode::ALL
+                        .iter()
+                        .position(|&m| m == self.mod_mode)
+                        .unwrap_or(0),
                     d,
                     ModifierMode::ALL.len(),
                 )];
@@ -587,7 +599,10 @@ impl State {
                 out.push(Command::SetParam(Param::Brightness(self.brightness)));
             }
             Item::Modo => {
-                let i = PlayMode::ALL.iter().position(|&m| m == self.play_mode).unwrap_or(0);
+                let i = PlayMode::ALL
+                    .iter()
+                    .position(|&m| m == self.play_mode)
+                    .unwrap_or(0);
                 self.set_play_mode(PlayMode::ALL[wrap(i, d, PlayMode::ALL.len())], out);
             }
             Item::Tempo => {
@@ -953,7 +968,10 @@ mod tests {
         let mut out = Vec::new();
         s.change(Item::Modo, 2, &mut out);
         assert_eq!(s.play_mode, PlayMode::Arpegio);
-        assert!(out.contains(&Command::SetStyle(Style::Arp { pattern: 0, rate: 3 })));
+        assert!(out.contains(&Command::SetStyle(Style::Arp {
+            pattern: 0,
+            rate: 3
+        })));
         // El menú rojo enseña Patrón y Figura solo en Arpegio.
         assert!(s.items(Menu::Modo).contains(&Item::Patron));
         s.change(Item::Modo, 1, &mut out);

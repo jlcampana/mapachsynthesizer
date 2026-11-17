@@ -9,3 +9,6 @@ anyhow = "1.0.104"
 cpal = "0.18.2"
 mapach-dsp = { version = "0.1.0", path = "../mapach-dsp" }
 rtrb = "0.4.1"
+
+[lints]
+workspace = true

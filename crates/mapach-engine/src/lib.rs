@@ -36,9 +36,14 @@ pub enum Param {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Command {
     /// Empieza a sonar una nota MIDI. `velocity` de 0 a 1.
-    NoteOn { note: u8, velocity: f32 },
+    NoteOn {
+        note: u8,
+        velocity: f32,
+    },
     /// Suelta una nota MIDI.
-    NoteOff { note: u8 },
+    NoteOff {
+        note: u8,
+    },
     /// Suelta todas las notas.
     AllNotesOff,
     /// Cambia el sonido (las perillas de ataque, release y brillo vuelven a los del sonido).
@@ -186,7 +191,9 @@ impl Engine {
                 let mut ob = OutBuf::new();
                 let len = (len as usize).min(MAX_CHORD);
                 self.performer
-                    .chord_on(&notes[..len], bass, velocity, retrigger, &mut |o| ob.push(o));
+                    .chord_on(&notes[..len], bass, velocity, retrigger, &mut |o| {
+                        ob.push(o)
+                    });
                 self.apply(&ob);
             }
             Command::ChordOff => {
@@ -281,7 +288,7 @@ impl Engine {
             self.apply(&ob);
             let mut bright = 0.0;
             for _ in 0..n {
-                bright = self.brightness.next();
+                bright = self.brightness.tick();
             }
             let cutoff = brightness_to_hz(bright);
             let block = &mut out[start * 2..(start + n) * 2];
@@ -294,7 +301,7 @@ impl Engine {
         let ceiling = self.limiter.ceiling();
         let mut peak = 0.0f32;
         for frame in out.chunks_exact_mut(2) {
-            let vol = self.volume.next();
+            let vol = self.volume.tick();
             // Curva de volumen cuadrática, y la mezcla escalada al techo del limitador.
             let g = vol * vol * ceiling * 3.0;
             let (l, r) = self.limiter.process(frame[0] * g, frame[1] * g);
@@ -309,7 +316,11 @@ impl Engine {
 /// Las notas graves al centro y las agudas un poco abiertas, alternando lado.
 fn pan_for_note(note: u8) -> f32 {
     let spread = ((note as f32 - 48.0) / 36.0).clamp(0.0, 1.0) * 0.4;
-    if note % 2 == 0 { -spread } else { spread }
+    if note.is_multiple_of(2) {
+        -spread
+    } else {
+        spread
+    }
 }
 
 #[cfg(test)]
@@ -317,7 +328,10 @@ mod tests {
     use super::*;
 
     fn on(note: u8) -> Command {
-        Command::NoteOn { note, velocity: 1.0 }
+        Command::NoteOn {
+            note,
+            velocity: 1.0,
+        }
     }
 
     fn render(e: &mut Engine, secs: f32) -> Vec<f32> {
@@ -395,7 +409,10 @@ mod tests {
     #[test]
     fn arpegio_en_el_motor() {
         let mut e = Engine::new(48_000.0);
-        e.handle(Command::SetStyle(Style::Arp { pattern: 0, rate: 3 }));
+        e.handle(Command::SetStyle(Style::Arp {
+            pattern: 0,
+            rate: 3,
+        }));
         e.handle(Command::chord(&[60, 64, 67], Some(48), 0.9, true));
         render(&mut e, 0.05);
         // Bajo + una nota del arpegio.

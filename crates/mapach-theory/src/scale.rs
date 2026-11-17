@@ -199,10 +199,22 @@ mod tests {
 
     #[test]
     fn tablas_diatonicas_de_fm1_chord() {
-        assert_eq!(kinds(Scale::Minor), [Minor, Dim, Major, Minor, Minor, Major, Major]);
-        assert_eq!(kinds(Scale::HarmonicMinor), [Minor, Dim, Aug, Minor, Major, Major, Dim]);
-        assert_eq!(kinds(Scale::Dorian), [Minor, Minor, Major, Major, Minor, Dim, Major]);
-        assert_eq!(kinds(Scale::Mixolydian), [Major, Minor, Dim, Major, Minor, Minor, Major]);
+        assert_eq!(
+            kinds(Scale::Minor),
+            [Minor, Dim, Major, Minor, Minor, Major, Major]
+        );
+        assert_eq!(
+            kinds(Scale::HarmonicMinor),
+            [Minor, Dim, Aug, Minor, Major, Major, Dim]
+        );
+        assert_eq!(
+            kinds(Scale::Dorian),
+            [Minor, Minor, Major, Major, Minor, Dim, Major]
+        );
+        assert_eq!(
+            kinds(Scale::Mixolydian),
+            [Major, Minor, Dim, Major, Minor, Minor, Major]
+        );
     }
 
     #[test]

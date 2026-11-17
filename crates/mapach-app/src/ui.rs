@@ -70,7 +70,8 @@ impl<'a> Canvas<'a> {
     }
 
     pub fn circle(&self, x: f32, y: f32, radius: f32, fill: Color32) {
-        self.painter.circle_filled(self.p(x, y), self.s(radius), fill);
+        self.painter
+            .circle_filled(self.p(x, y), self.s(radius), fill);
     }
 
     pub fn ring(&self, x: f32, y: f32, radius: f32, width: f32, c: Color32) {
@@ -107,7 +108,14 @@ pub fn draw(c: &Canvas, st: &State, extra: &Extra) {
     c.painter.rect_filled(c.painter.clip_rect(), 0.0, NARANJA);
     c.rect(12.0, 12.0, 936.0, 516.0, 36.0, AMARILLO);
     c.rect(12.0, 12.0, 936.0, 258.0, 36.0, AMARILLO_CLARO);
-    c.rect(12.0, 200.0, 936.0, 120.0, 0.0, AMARILLO_CLARO.lerp_to_gamma(AMARILLO, 0.5));
+    c.rect(
+        12.0,
+        200.0,
+        936.0,
+        120.0,
+        0.0,
+        AMARILLO_CLARO.lerp_to_gamma(AMARILLO, 0.5),
+    );
 
     top_bar(c, st);
     menu_buttons(c, st);
@@ -116,7 +124,14 @@ pub fn draw(c: &Canvas, st: &State, extra: &Extra) {
     chord_buttons(c, st);
 
     if !extra.status.is_empty() {
-        c.text(940.0, 534.0, Align2::RIGHT_BOTTOM, extra.status, 9.0, MARRON.gamma_multiply(0.6));
+        c.text(
+            940.0,
+            534.0,
+            Align2::RIGHT_BOTTOM,
+            extra.status,
+            9.0,
+            MARRON.gamma_multiply(0.6),
+        );
     }
 }
 
@@ -143,9 +158,23 @@ fn top_bar(c: &Canvas, st: &State) {
     let s = &SOUNDS[st.sound];
     c.rect(406.0, 30.0, 200.0, 40.0, 20.0, MENU_AMARILLO);
     c.rect_stroke(406.0, 30.0, 200.0, 40.0, 20.0, 3.0, hex(0xE0A800));
-    c.text(506.0, 50.0, Align2::CENTER_CENTER, format!("{} {}", s.icon, s.name), 19.0, MARRON);
+    c.text(
+        506.0,
+        50.0,
+        Align2::CENTER_CENTER,
+        format!("{} {}", s.icon, s.name),
+        19.0,
+        MARRON,
+    );
 
-    pill(c, 616.0, 120.0, BLANCO, &format!("♩ {:.0} BPM", st.bpm), NARANJA);
+    pill(
+        c,
+        616.0,
+        120.0,
+        BLANCO,
+        &format!("♩ {:.0} BPM", st.bpm),
+        NARANJA,
+    );
 
     // Volumen: 8 segmentos.
     c.rect(746.0, 34.0, 178.0, 32.0, 16.0, hex(0xE8A600));
@@ -196,7 +225,10 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
     c.rect(146.0, 86.0, 568.0, 278.0, 28.0, NARANJA);
     c.rect(154.0, 94.0, 552.0, 262.0, 22.0, OLED);
 
-    let menu = st.menu_held().map(|m| (m, None)).or(st.open_menu.map(|o| (o.menu, Some(o.item))));
+    let menu = st
+        .menu_held()
+        .map(|m| (m, None))
+        .or(st.open_menu.map(|o| (o.menu, Some(o.item))));
     if let Some((m, sel)) = menu {
         menu_page(c, st, m, sel);
     } else if st.play_mode == PlayMode::Melodia {
@@ -204,11 +236,25 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
     } else if let Some(s) = &st.current {
         let col = ACORDES[s.button as usize];
         if st.show_names {
-            c.text(430.0, 165.0, Align2::CENTER_CENTER, s.chord.name(), 84.0, NEON_AMARILLO);
+            c.text(
+                430.0,
+                165.0,
+                Align2::CENTER_CENTER,
+                s.chord.name(),
+                84.0,
+                NEON_AMARILLO,
+            );
         } else {
             c.circle(430.0, 160.0, 50.0, col);
             c.ring(430.0, 160.0, 56.0, 4.0, col.gamma_multiply(0.5));
-            c.text(430.0, 160.0, Align2::CENTER_CENTER, s.button + 1, 56.0, texto_sobre(col));
+            c.text(
+                430.0,
+                160.0,
+                Align2::CENTER_CENTER,
+                s.button + 1,
+                56.0,
+                texto_sobre(col),
+            );
         }
         let color = match s.dir {
             Some(d) => format!("{}  {}", d.arrow(), dir_label(st.mod_mode, d)),
@@ -216,7 +262,14 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
         };
         c.text(430.0, 235.0, Align2::CENTER_CENTER, color, 22.0, NEON_CIAN);
     } else {
-        c.text(430.0, 140.0, Align2::CENTER_CENTER, "🦝", 64.0, NEON_AMARILLO);
+        c.text(
+            430.0,
+            140.0,
+            Align2::CENTER_CENTER,
+            "🦝",
+            64.0,
+            NEON_AMARILLO,
+        );
         c.text(
             430.0,
             215.0,
@@ -239,7 +292,13 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
     mini_piano(c, st);
     // Looper (de momento vacío).
     for i in 0..6 {
-        c.ring(596.0 + i as f32 * 18.0, 333.0, 7.0, 2.0, OLED_APAGADO.lerp_to_gamma(BLANCO, 0.2));
+        c.ring(
+            596.0 + i as f32 * 18.0,
+            333.0,
+            7.0,
+            2.0,
+            OLED_APAGADO.lerp_to_gamma(BLANCO, 0.2),
+        );
     }
 }
 
@@ -247,7 +306,11 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
 fn scope(c: &Canvas, st: &State, extra: &Extra) {
     let notes: Vec<i32> = match st.play_mode {
         PlayMode::Melodia => st.melody.iter().map(|&(_, n)| n).collect(),
-        _ => st.current.as_ref().map(|s| s.notes.clone()).unwrap_or_default(),
+        _ => st
+            .current
+            .as_ref()
+            .map(|s| s.notes.clone())
+            .unwrap_or_default(),
     };
     let amp = (extra.peak * 4.0).clamp(0.0, 1.0);
     let x0 = 176.0;
@@ -272,14 +335,22 @@ fn scope(c: &Canvas, st: &State, extra: &Extra) {
             (x0 + u * w, y0 - v * amp * 16.0 * win)
         })
         .collect();
-    let col = if amp > 0.01 { NEON_ROSA } else { NEON_ROSA.gamma_multiply(0.3) };
+    let col = if amp > 0.01 {
+        NEON_ROSA
+    } else {
+        NEON_ROSA.gamma_multiply(0.3)
+    };
     c.line(&pts, 3.0, col);
 }
 
 fn mini_piano(c: &Canvas, st: &State) {
     let notes: Vec<i32> = match st.play_mode {
         PlayMode::Melodia => st.melody.iter().map(|&(_, n)| n).collect(),
-        _ => st.current.as_ref().map(|s| s.notes.clone()).unwrap_or_default(),
+        _ => st
+            .current
+            .as_ref()
+            .map(|s| s.notes.clone())
+            .unwrap_or_default(),
     };
     let col = st
         .current
@@ -287,7 +358,11 @@ fn mini_piano(c: &Canvas, st: &State) {
         .map(|s| ACORDES[s.button as usize])
         .unwrap_or(NEON_AMARILLO);
     // 3 octavas desde el Do de la nota más grave que suene (o Do2).
-    let lo = notes.iter().map(|n| n - n.rem_euclid(12)).min().unwrap_or(36);
+    let lo = notes
+        .iter()
+        .map(|n| n - n.rem_euclid(12))
+        .min()
+        .unwrap_or(36);
     let (x0, y0, kw) = (176.0, 318.0, 19.0);
     let white_x = |n: i32| {
         let oct = (n - lo).div_euclid(12);
@@ -324,9 +399,23 @@ fn melody_view(c: &Canvas, st: &State) {
         } else {
             "♪".to_string()
         };
-        c.text(430.0, 165.0, Align2::CENTER_CENTER, label, 44.0, texto_sobre(col));
+        c.text(
+            430.0,
+            165.0,
+            Align2::CENTER_CENTER,
+            label,
+            44.0,
+            texto_sobre(col),
+        );
     } else {
-        c.text(430.0, 150.0, Align2::CENTER_CENTER, "♪ Melodía", 52.0, NEON_AMARILLO);
+        c.text(
+            430.0,
+            150.0,
+            Align2::CENTER_CENTER,
+            "♪ Melodía",
+            52.0,
+            NEON_AMARILLO,
+        );
         c.text(
             430.0,
             215.0,
@@ -345,17 +434,46 @@ fn menu_page(c: &Canvas, st: &State, m: Menu, sel: Option<usize>) {
         Menu::Modo => ("MODO", MENU_ROJO),
     };
     c.rect(174.0, 106.0, 120.0, 30.0, 15.0, col);
-    c.text(234.0, 121.0, Align2::CENTER_CENTER, title, 18.0, texto_sobre(col));
+    c.text(
+        234.0,
+        121.0,
+        Align2::CENTER_CENTER,
+        title,
+        18.0,
+        texto_sobre(col),
+    );
 
     if sel.is_none() {
         // Menú mantenido: chuleta de combinaciones.
         let tips: &[&str] = match m {
-            Menu::Tono => &["← →  tonalidad", "↑ ↓  octava", "Espacio  🎲 al azar", "Suelta para ver más"],
-            Menu::Sonido => &["← →  sonido", "↑ ↓  brillo", "Espacio  🎲 al azar", "Suelta para ver más"],
-            Menu::Modo => &["← →  modo", "↑ ↓  tempo", "Espacio  🎲 al azar", "Suelta para ver más"],
+            Menu::Tono => &[
+                "← →  tonalidad",
+                "↑ ↓  octava",
+                "Espacio  🎲 al azar",
+                "Suelta para ver más",
+            ],
+            Menu::Sonido => &[
+                "← →  sonido",
+                "↑ ↓  brillo",
+                "Espacio  🎲 al azar",
+                "Suelta para ver más",
+            ],
+            Menu::Modo => &[
+                "← →  modo",
+                "↑ ↓  tempo",
+                "Espacio  🎲 al azar",
+                "Suelta para ver más",
+            ],
         };
         for (i, t) in tips.iter().enumerate() {
-            c.text(430.0, 160.0 + i as f32 * 32.0, Align2::CENTER_CENTER, t, 22.0, NEON_CIAN);
+            c.text(
+                430.0,
+                160.0 + i as f32 * 32.0,
+                Align2::CENTER_CENTER,
+                t,
+                22.0,
+                NEON_CIAN,
+            );
         }
         let big = match m {
             Menu::Tono => value_text(st, Item::Tonalidad),
@@ -374,7 +492,11 @@ fn menu_page(c: &Canvas, st: &State, m: Menu, sel: Option<usize>) {
         if on {
             c.rect(174.0, y - 13.0, 512.0, 26.0, 13.0, OLED_APAGADO);
         }
-        let tc = if on { NEON_AMARILLO } else { NEON_CIAN.gamma_multiply(0.7) };
+        let tc = if on {
+            NEON_AMARILLO
+        } else {
+            NEON_CIAN.gamma_multiply(0.7)
+        };
         c.text(190.0, y, Align2::LEFT_CENTER, item.label(), 19.0, tc);
         let v = value_text(st, item);
         let v = if on { format!("◀  {v}  ▶") } else { v };
@@ -469,21 +591,47 @@ fn joystick(c: &Canvas, st: &State) {
     for (d, dx, dy) in arrows {
         let (x, y) = (cx + dx * 62.0, cy + dy * 62.0);
         let menu = st.open_menu.is_some() || st.menu_held().is_some();
-        let on = !menu
-            && (active == Some(d) || (st.current.is_none() && st.arrow_dir() == Some(d)));
+        let on =
+            !menu && (active == Some(d) || (st.current.is_none() && st.arrow_dir() == Some(d)));
         if on {
-            c.circle(x, y, 22.0, ACORDES[st.current.as_ref().map_or(0, |s| s.button as usize)]);
+            c.circle(
+                x,
+                y,
+                22.0,
+                ACORDES[st.current.as_ref().map_or(0, |s| s.button as usize)],
+            );
         }
         let label = format!("{}\n{}", d.arrow(), dir_label(st.mod_mode, d));
-        c.text(x, y, Align2::CENTER_CENTER, label, 12.0, if on { BLANCO } else { MARRON });
+        c.text(
+            x,
+            y,
+            Align2::CENTER_CENTER,
+            label,
+            12.0,
+            if on { BLANCO } else { MARRON },
+        );
     }
     let held = [Arrow::Up, Arrow::Down, Arrow::Left, Arrow::Right]
         .iter()
         .any(|&a| st.arrow_held(a));
     c.circle(cx, cy, 26.0, if held { MENU_ROJO } else { NARANJA });
     c.text(cx, cy, Align2::CENTER_CENTER, "flechas", 11.0, BLANCO);
-    c.text(cx, 330.0, Align2::CENTER_CENTER, "Mantén un acorde", 15.0, MARRON);
-    c.text(cx, 349.0, Align2::CENTER_CENTER, "y pulsa una flecha", 15.0, MARRON);
+    c.text(
+        cx,
+        330.0,
+        Align2::CENTER_CENTER,
+        "Mantén un acorde",
+        15.0,
+        MARRON,
+    );
+    c.text(
+        cx,
+        349.0,
+        Align2::CENTER_CENTER,
+        "y pulsa una flecha",
+        15.0,
+        MARRON,
+    );
 }
 
 const LETRAS: [&str; 7] = ["A", "S", "D", "F", "G", "H", "J"];
@@ -509,11 +657,25 @@ fn chord_buttons(c: &Canvas, st: &State) {
             let name = st.chord_for(b as u8, false).name();
             let size = if name.chars().count() > 5 { 24.0 } else { 34.0 };
             c.text(cx, y + 42.0, Align2::CENTER_CENTER, name, size, tc);
-            c.text(cx, y + 78.0, Align2::CENTER_CENTER, ROMANOS[b], 18.0, tc.gamma_multiply(0.8));
+            c.text(
+                cx,
+                y + 78.0,
+                Align2::CENTER_CENTER,
+                ROMANOS[b],
+                18.0,
+                tc.gamma_multiply(0.8),
+            );
         } else {
             c.text(cx, y + 52.0, Align2::CENTER_CENTER, b + 1, 52.0, tc);
         }
-        c.text(cx, y + 104.0, Align2::CENTER_CENTER, format!("[{}]", LETRAS[b]), 17.0, tc.gamma_multiply(0.8));
+        c.text(
+            cx,
+            y + 104.0,
+            Align2::CENTER_CENTER,
+            format!("[{}]", LETRAS[b]),
+            17.0,
+            tc.gamma_multiply(0.8),
+        );
     }
 }
 
@@ -523,9 +685,23 @@ pub fn draw_papa(c: &Canvas, lines: &[String]) {
         .rect_filled(c.painter.clip_rect(), 0.0, Color32::from_black_alpha(200));
     c.rect(180.0, 80.0, 600.0, 380.0, 28.0, OLED);
     c.rect_stroke(180.0, 80.0, 600.0, 380.0, 28.0, 4.0, NARANJA);
-    c.text(480.0, 120.0, Align2::CENTER_CENTER, "🔧 Modo papá", 32.0, NEON_AMARILLO);
+    c.text(
+        480.0,
+        120.0,
+        Align2::CENTER_CENTER,
+        "🔧 Modo papá",
+        32.0,
+        NEON_AMARILLO,
+    );
     for (i, l) in lines.iter().enumerate() {
-        c.text(220.0, 170.0 + i as f32 * 30.0, Align2::LEFT_CENTER, l, 19.0, NEON_CIAN);
+        c.text(
+            220.0,
+            170.0 + i as f32 * 30.0,
+            Align2::LEFT_CENTER,
+            l,
+            19.0,
+            NEON_CIAN,
+        );
     }
     c.text(
         480.0,
@@ -539,5 +715,7 @@ pub fn draw_papa(c: &Canvas, lines: &[String]) {
 
 /// Para los tests y el ratón: qué tecla de acorde hay en un punto del lienzo.
 pub fn chord_at(p: Pos2) -> Option<u8> {
-    (0..7).find(|&b| chord_button_rect(b).contains(p)).map(|b| b as u8)
+    (0..7)
+        .find(|&b| chord_button_rect(b).contains(p))
+        .map(|b| b as u8)
 }

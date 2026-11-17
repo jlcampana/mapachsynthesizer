@@ -307,7 +307,11 @@ impl Performer {
                     };
                     let note = self.arp_note(idx);
                     // El primer paso de cada vuelta, un poco más fuerte.
-                    let accent = if self.step % pat.len() == 0 { 1.0 } else { 0.8 };
+                    let accent = if self.step.is_multiple_of(pat.len()) {
+                        1.0
+                    } else {
+                        0.8
+                    };
                     self.note_on(note, self.velocity * accent, out);
                     self.step += 1;
                     self.countdown += step_len;
@@ -421,7 +425,13 @@ mod tests {
     fn arpegio_a_tempo() {
         let mut p = Performer::new(SR);
         p.set_bpm(120.0);
-        p.set_style(Style::Arp { pattern: 0, rate: 1 }, &mut |_| {});
+        p.set_style(
+            Style::Arp {
+                pattern: 0,
+                rate: 1,
+            },
+            &mut |_| {},
+        );
         p.chord_on(&[60, 64, 67], None, 1.0, true, &mut |_| {});
         let v = collect(&mut p, 1.0);
         let on = ons(&v);
@@ -437,7 +447,13 @@ mod tests {
     fn arpegio_al_azar_es_determinista() {
         let run = || {
             let mut p = Performer::new(SR);
-            p.set_style(Style::Arp { pattern: ARP_RANDOM, rate: 3 }, &mut |_| {});
+            p.set_style(
+                Style::Arp {
+                    pattern: ARP_RANDOM,
+                    rate: 3,
+                },
+                &mut |_| {},
+            );
             p.chord_on(&[60, 64, 67], None, 1.0, true, &mut |_| {});
             ons(&collect(&mut p, 1.0))
         };

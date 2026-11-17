@@ -40,7 +40,11 @@ impl Voicing {
 
     /// Todas las notas, el bajo primero.
     pub fn notes(&self) -> Vec<i32> {
-        self.bass.iter().copied().chain(self.upper.iter().copied()).collect()
+        self.bass
+            .iter()
+            .copied()
+            .chain(self.upper.iter().copied())
+            .collect()
     }
 }
 
@@ -72,7 +76,13 @@ fn invert(notes: &mut [i32], n: u8) {
 /// (de grave a agudo, repitiendo la más aguda si una lista es más corta), más 6 si la nota
 /// más grave salta más de 7 semitonos. En los empates gana la más cercana a la fundamental.
 pub fn voice_lead(prev: &[i32], chord: Chord, opts: VoicingOptions) -> Voicing {
-    let base = Voicing::build(chord, VoicingOptions { inversion: 0, ..opts });
+    let base = Voicing::build(
+        chord,
+        VoicingOptions {
+            inversion: 0,
+            ..opts
+        },
+    );
     if prev.is_empty() {
         return Voicing::build(chord, opts);
     }
@@ -129,9 +139,21 @@ mod tests {
     #[test]
     fn inversiones() {
         let c = Chord::new(48, Major);
-        let v = Voicing::build(c, VoicingOptions { bass: false, inversion: 1 });
+        let v = Voicing::build(
+            c,
+            VoicingOptions {
+                bass: false,
+                inversion: 1,
+            },
+        );
         assert_eq!(v.upper, [52, 55, 60]);
-        let v = Voicing::build(c, VoicingOptions { bass: false, inversion: 2 });
+        let v = Voicing::build(
+            c,
+            VoicingOptions {
+                bass: false,
+                inversion: 2,
+            },
+        );
         assert_eq!(v.upper, [55, 60, 64]);
     }
 
@@ -143,7 +165,10 @@ mod tests {
 
     #[test]
     fn voice_leading_de_do_a_fa() {
-        let opts = VoicingOptions { bass: false, inversion: 0 };
+        let opts = VoicingOptions {
+            bass: false,
+            inversion: 0,
+        };
         let prev = [48, 52, 55]; // Do
         let v = voice_lead(&prev, Chord::new(53, Major), opts);
         // Fa en segunda inversión (Do-Fa-La) es lo que menos se mueve.

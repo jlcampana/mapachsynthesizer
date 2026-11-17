@@ -85,7 +85,13 @@ mod tests {
 
     #[test]
     fn amplitud_acotada_y_finita() {
-        for wave in [Waveform::Sine, Waveform::Saw, Waveform::Square, Waveform::Pulse, Waveform::Triangle] {
+        for wave in [
+            Waveform::Sine,
+            Waveform::Saw,
+            Waveform::Square,
+            Waveform::Pulse,
+            Waveform::Triangle,
+        ] {
             for freq in [55.0, 440.0, 5_000.0, 20_000.0] {
                 let s = render(wave, freq, 48_000);
                 assert!(s.iter().all(|x| x.is_finite()), "{wave:?}");
@@ -97,7 +103,13 @@ mod tests {
 
     #[test]
     fn sin_continua() {
-        for wave in [Waveform::Sine, Waveform::Saw, Waveform::Square, Waveform::Pulse, Waveform::Triangle] {
+        for wave in [
+            Waveform::Sine,
+            Waveform::Saw,
+            Waveform::Square,
+            Waveform::Pulse,
+            Waveform::Triangle,
+        ] {
             let s = render(wave, 100.0, 48_000);
             let mean: f32 = s[24_000..].iter().sum::<f32>() / 24_000.0;
             assert!(mean.abs() < 0.05, "{wave:?}: {mean}");

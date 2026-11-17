@@ -52,7 +52,11 @@ impl Limiter {
         let l = if l.is_finite() { l } else { 0.0 };
         let r = if r.is_finite() { r } else { 0.0 };
         let peak = l.abs().max(r.abs());
-        let need = if peak > self.ceiling { self.ceiling / peak } else { 1.0 };
+        let need = if peak > self.ceiling {
+            self.ceiling / peak
+        } else {
+            1.0
+        };
 
         let out_l = self.delay_l[self.pos];
         let out_r = self.delay_r[self.pos];
@@ -72,7 +76,10 @@ impl Limiter {
         }
         // Red de seguridad: recorte duro en el techo.
         let c = self.ceiling;
-        ((out_l * self.gain).clamp(-c, c), (out_r * self.gain).clamp(-c, c))
+        (
+            (out_l * self.gain).clamp(-c, c),
+            (out_r * self.gain).clamp(-c, c),
+        )
     }
 }
 
