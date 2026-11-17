@@ -1,0 +1,8 @@
+[package]
+name = "mapach-input"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+evdev = "0.13.2"
