@@ -20,6 +20,7 @@ use performer::{Out, Performer};
 
 use mapach_dsp::effects::{Effect, FxChain};
 use mapach_dsp::{AdsrParams, Limiter, Smoothed, db_to_gain};
+pub use voice::SampleSlot;
 use voice::Voice;
 
 /// Parámetros que se controlan con las perillas.
@@ -93,6 +94,14 @@ pub enum Command {
     SetEffectAmount(f32),
     /// Cantidad de sala (reverb), 0–1.
     SetReverb(f32),
+    /// Pone un sample en un hueco del sampler (0 = el de "Mi sample").
+    SetSample {
+        slot: u8,
+        data: std::sync::Arc<[f32]>,
+        root: f32,
+    },
+    /// Escucha un sample tal cual (en el taller). `None` para.
+    Preview(Option<std::sync::Arc<[f32]>>),
     /// Copia una pista del looper en el búfer (de `looper_capacity() * 2` muestras).
     LoopCopy {
         track: u8,
@@ -114,7 +123,12 @@ pub enum Reply {
     Track(looper::TrackCopy),
     /// Un búfer que ya no se usa: hay que liberarlo fuera del hilo de audio.
     Free(Box<[f32]>),
+    /// Un sample que ya no se usa (se libera fuera del hilo de audio).
+    FreeSample(std::sync::Arc<[f32]>),
 }
+
+/// Huecos de sample.
+pub const SAMPLE_SLOTS: usize = 2;
 
 impl Command {
     /// Construye un `ChordOn` a partir de una lista de notas.
@@ -185,6 +199,9 @@ pub struct Engine {
     drums: DrumMachine,
     looper: Looper,
     fx: FxChain,
+    samples: [Option<SampleSlot>; SAMPLE_SLOTS],
+    /// Escucha de un sample en el taller: datos y posición.
+    preview: Option<(std::sync::Arc<[f32]>, usize)>,
     bpm: f32,
     /// Respuestas pendientes (como mucho unas pocas: no reserva en el hilo de audio).
     replies: [Option<Reply>; 4],
@@ -208,6 +225,8 @@ impl Engine {
             drums: DrumMachine::new(sample_rate),
             looper: Looper::new(sample_rate),
             fx: FxChain::new(sample_rate),
+            samples: [None, None],
+            preview: None,
             bpm: 120.0,
             replies: [None, None, None, None],
             clock: 0,
@@ -288,6 +307,22 @@ impl Engine {
             Command::LoopClear(t) => self.looper.clear(t as usize),
             Command::LoopMute(t, m) => self.looper.set_muted(t as usize, m),
             Command::LoopVolume(t, v) => self.looper.set_volume(t as usize, v),
+            Command::SetSample { slot, data, root } => {
+                let slot = slot as usize % SAMPLE_SLOTS;
+                // Las voces que lo usaban se cortan (sus datos cambian).
+                if matches!(self.patch.kind, Kind::Sampler { .. }) {
+                    self.voices.iter_mut().for_each(Voice::release);
+                }
+                if let Some(old) = self.samples[slot].replace(SampleSlot { data, root }) {
+                    self.reply(Reply::FreeSample(old.data));
+                }
+            }
+            Command::Preview(p) => {
+                if let Some((old, _)) = self.preview.take() {
+                    self.reply(Reply::FreeSample(old));
+                }
+                self.preview = p.map(|d| (d, 0));
+            }
             Command::SetEffect(e) => self.fx.set_effect(e),
             Command::SetEffectAmount(a) => self.fx.amount = a.clamp(0.0, 1.0),
             Command::SetReverb(r) => self.fx.reverb = r.clamp(0.0, 1.0),
@@ -416,9 +451,24 @@ impl Engine {
             let cutoff = brightness_to_hz(bright);
             let block = &mut out[start * 2..(start + n) * 2];
             for v in self.voices.iter_mut().filter(|v| v.is_active()) {
-                v.render(block, &self.patch, &self.env, cutoff, self.sample_rate);
+                v.render(
+                    block,
+                    &self.patch,
+                    &self.env,
+                    cutoff,
+                    self.sample_rate,
+                    &self.samples,
+                );
             }
             self.drums.render(block, self.bpm);
+            if let Some((data, pos)) = &mut self.preview {
+                for frame in block.chunks_exact_mut(2) {
+                    let Some(&v) = data.get(*pos) else { break };
+                    frame[0] += v * 0.5;
+                    frame[1] += v * 0.5;
+                    *pos += 1;
+                }
+            }
             // Los efectos van antes del looper: cada capa se graba con su sonido.
             self.fx.process(block, self.bpm);
             let bpm = self.drums.is_playing().then_some(self.bpm);
@@ -615,6 +665,7 @@ mod tests {
     fn loudness() -> Vec<(&'static str, f32)> {
         SOUNDS
             .iter()
+            .filter(|snd| !matches!(snd.patch.kind, Kind::Sampler { .. }))
             .map(|snd| {
                 let mut e = Engine::new(48_000.0);
                 e.handle(Command::SetPatch(snd.patch));
@@ -676,6 +727,64 @@ mod tests {
                 "{fx:?}"
             );
         }
+    }
+
+    #[test]
+    fn sampler_afina_segun_la_raiz() {
+        let mut e = Engine::new(48_000.0);
+        // Un "sample" de 1 s a 220 Hz (La3 = 57).
+        let data: std::sync::Arc<[f32]> = (0..48_000)
+            .map(|i| (i as f32 * 220.0 * std::f32::consts::TAU / 48_000.0).sin())
+            .collect();
+        e.handle(Command::SetSample {
+            slot: 0,
+            data,
+            root: 57.0,
+        });
+        let sampler = SOUNDS
+            .iter()
+            .find(|s| matches!(s.patch.kind, Kind::Sampler { .. }))
+            .unwrap();
+        e.handle(Command::SetPatch(sampler.patch));
+        // Una octava arriba: dura la mitad.
+        e.handle(on(69));
+        render(&mut e, 0.3);
+        assert_eq!(e.active_voices(), 1);
+        render(&mut e, 0.3);
+        assert_eq!(e.active_voices(), 0);
+        // Cambiar el sample devuelve el viejo para liberarlo fuera.
+        e.handle(Command::SetSample {
+            slot: 0,
+            data: std::sync::Arc::from(vec![0.0f32; 10]),
+            root: 60.0,
+        });
+        assert!(matches!(e.take_reply(), Some(Reply::FreeSample(_))));
+    }
+
+    #[test]
+    fn sampler_vacio_no_suena() {
+        let mut e = Engine::new(48_000.0);
+        let sampler = SOUNDS
+            .iter()
+            .find(|s| matches!(s.patch.kind, Kind::Sampler { .. }))
+            .unwrap();
+        e.handle(Command::SetPatch(sampler.patch));
+        e.handle(on(60));
+        let buf = render(&mut e, 0.1);
+        assert!(buf.iter().all(|&s| s == 0.0));
+    }
+
+    #[test]
+    fn escuchar_un_sample() {
+        let mut e = Engine::new(48_000.0);
+        e.handle(Command::Preview(Some(std::sync::Arc::from(vec![
+            0.5f32;
+            4800
+        ]))));
+        render(&mut e, 0.05);
+        assert!(e.peak() > 0.01);
+        e.handle(Command::Preview(None));
+        assert!(matches!(e.take_reply(), Some(Reply::FreeSample(_))));
     }
 
     #[test]

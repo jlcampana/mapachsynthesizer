@@ -24,6 +24,8 @@ pub enum Kind {
     Noise { focus: f32, lfo: f32 },
     /// Sierra con dos formantes de vocal (coro). `vowel`: 0 = a, 1 = e, 2 = i, 3 = o, 4 = u.
     Formant { vowel: u8 },
+    /// Un sample del taller, afinado según su nota raíz.
+    Sampler { slot: u8 },
 }
 
 /// Ajustes de un sonido. Es `Copy` para poder mandarlo por el ring buffer.
@@ -105,7 +107,7 @@ const fn other(kind: Kind, env: AdsrParams, brightness: f32, vibrato: f32) -> Pa
 use Waveform::*;
 
 /// Sonidos de serie del motor analógico.
-pub const SOUNDS: [Sound; 20] = [
+pub const SOUNDS: [Sound; 21] = [
     Sound {
         name: "Nube",
         icon: "☁",
@@ -366,6 +368,18 @@ pub const SOUNDS: [Sound; 20] = [
             AdsrParams::new(0.5, 0.5, 0.8, 1.5),
             1.0,
             0.35,
+        ),
+    },
+    // --- Sampler ---
+    Sound {
+        name: "Mi sample",
+        icon: "🎤",
+        color: [0xFF, 0x3B, 0x3B],
+        patch: other(
+            Kind::Sampler { slot: 0 },
+            AdsrParams::new(0.002, 0.1, 1.0, 0.3),
+            1.0,
+            0.0,
         ),
     },
 ];

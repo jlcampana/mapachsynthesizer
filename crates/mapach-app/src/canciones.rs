@@ -257,8 +257,9 @@ impl Songs {
                 }
                 self.pump(audio);
             }
-            // Búfer viejo: se libera aquí, fuera del hilo de audio.
+            // Búferes viejos: se liberan aquí, fuera del hilo de audio.
             Reply::Free(buf) => drop(buf),
+            Reply::FreeSample(s) => drop(s),
         }
     }
 

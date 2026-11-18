@@ -38,6 +38,16 @@ pub(crate) struct Voice {
     age: f32,
     lfo: f32,
     noise: Noise,
+    /// Posición en el sample (sampler).
+    sample_pos: f64,
+}
+
+/// Un sample cargado en el motor.
+#[derive(Debug, Clone)]
+pub struct SampleSlot {
+    pub data: std::sync::Arc<[f32]>,
+    /// Nota MIDI a la que suena tal cual.
+    pub root: f32,
 }
 
 impl Voice {
@@ -61,6 +71,7 @@ impl Voice {
             self.lfo = p;
         }
         self.age = 0.0;
+        self.sample_pos = 0.0;
         self.held = true;
         self.env.gate_on();
     }
@@ -94,8 +105,20 @@ impl Voice {
         env: &AdsrParams,
         cutoff: f32,
         sample_rate: f32,
+        samples: &[Option<SampleSlot>],
     ) {
         let base = self.note as f32;
+        // Sampler: velocidad de lectura según la nota y la raíz del sample.
+        let sample = match patch.kind {
+            Kind::Sampler { slot } => samples.get(slot as usize).and_then(|s| s.as_ref()),
+            _ => None,
+        };
+        let sample_rate_ratio = sample.map_or(1.0, |s| 2f64.powf((base - s.root) as f64 / 12.0));
+        if matches!(patch.kind, Kind::Sampler { .. }) && sample.is_none() {
+            // Sin sample no suena nada.
+            self.env.reset();
+            return;
+        }
         let f1 = midi_to_freq(base + patch.osc1_semitones);
         let f2 = midi_to_freq(base + patch.osc2_semitones + patch.detune_cents / 100.0);
         let dt1 = f1 / sample_rate;
@@ -174,6 +197,17 @@ impl Voice {
                     let n = self.noise.sample();
                     // Cuanto más ancho el filtro, más energía: lo compensamos.
                     self.filter2.process(n).band * 2.5 * wobble * (0.4 + 0.6 * focus_gain)
+                }
+                Kind::Sampler { .. } => {
+                    let data = sample.map_or(&[][..], |s| &s.data[..]);
+                    let i = self.sample_pos as usize;
+                    if i + 1 >= data.len() {
+                        self.env.reset();
+                        break;
+                    }
+                    let frac = (self.sample_pos - i as f64) as f32;
+                    self.sample_pos += sample_rate_ratio * vib as f64;
+                    (data[i] + (data[i + 1] - data[i]) * frac) * 1.8
                 }
                 Kind::Formant { .. } => {
                     let saw = self.osc1.next(Waveform::Saw, dt1 * vib)
