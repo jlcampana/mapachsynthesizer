@@ -17,7 +17,7 @@ Con él se puede:
 
 ## Estado
 
-🎹 **Ya se puede tocar.** Están hechas las fases 0, 1, 2 y 4 del [plan](docs/plan.md#5-fases-y-entregables):
+🎹 **Ya se puede tocar.** Están hechas las fases 0, 1, 2, 4, 6, 7 y 9 del [plan](docs/plan.md#5-fases-y-entregables):
 
 - Los 7 acordes de colores con voice leading, las flechas y la perilla mágica para cambiarles el
   color, y la fila `Q`…`U` una octava más aguda.
@@ -25,12 +25,17 @@ Con él se puede:
   hacen atajos con las flechas y las perillas, y con `Espacio` ponen valores al azar 🎲.
 - 8 sonidos de analógico virtual, con ataque, release y brillo.
 - Modos Tocar, Rasgueo, Arpegio (6 patrones), Repetir, Zumbido y Melodía, con tempo y tap tempo (`B`).
+- **Batería** sintetizada (4 kits), **56 ritmos** y **secuenciador de 16 pasos**.
+- **Looper de 6 pistas**: `Espacio` graba, `1`–`6` eligen pista, mantener una pista 1,5 s la
+  borra y `Retroceso` deshace.
+- **Mis canciones** (`F5`): se guardan solas, con nombres divertidos, y se exportan a **MP3, OGG o
+  WAV** en `Música/Mapachsynthesizer/Exportadas`.
 - El mando de 16 teclas y 3 perillas, leído por `evdev` en exclusiva.
 - Limitador a −12 dBFS al final de todo y ajustes que se guardan solos.
 - Modo papá (`Ctrl+Alt+P`), el único sitio desde donde se sale (`Q`).
 
-**Falta:** el asistente "Aprender mando", batería, looper, canciones y exportar, más motores de
-sonido, efectos, taller de samples y paquetes.
+**Falta:** el asistente "Aprender mando", más motores de sonido (FM, samples…), efectos, el taller
+de samples y los paquetes `.deb` y `.rpm`.
 
 ## Compilar y tocar
 
@@ -53,10 +58,14 @@ cargo run --release -p mapach-app -- --ventana   # en una ventana
 | Rueda del ratón | Perilla mágica (2) |
 | `-` / `+` | Tempo (perilla 3) |
 | `B` | Tap tempo |
+| `Espacio` | Grabar en el looper (con un menú pulsado: 🎲 al azar) |
+| `1`–`6` | Elegir pista del looper (mantener: borrarla) |
+| `Intro` | Play / pausa del looper y del ritmo |
+| `F5` | Mis canciones |
 | `Ctrl+Alt+P` | Modo papá (salir con `Q`) |
 
 Para depurar sin sonido: `mapach-app --ventana --captura salida.ppm --demo 1` guarda una captura
-de la pantalla (escenas 0–6).
+de la pantalla (escenas 0–12).
 
 ### Documentos
 
