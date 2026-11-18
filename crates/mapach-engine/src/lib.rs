@@ -11,7 +11,7 @@ mod patch;
 pub mod performer;
 mod voice;
 
-pub use patch::{Patch, SOUNDS, Sound};
+pub use patch::{Kind, Patch, SOUNDS, Sound};
 pub use performer::{ARP_PATTERNS, MAX_CHORD, RATES, STRUM_MS, Style};
 
 use drums::{DrumMachine, Pattern};
@@ -596,6 +596,53 @@ mod tests {
         let t = got.expect("la copia no llegó");
         assert_eq!(t.frames, 24_000);
         assert!(t.buf[..48_000].iter().any(|s| s.abs() > 0.01));
+    }
+
+    /// RMS de un acorde de Do mayor durante 1 s con cada sonido.
+    fn loudness() -> Vec<(&'static str, f32)> {
+        SOUNDS
+            .iter()
+            .map(|snd| {
+                let mut e = Engine::new(48_000.0);
+                e.handle(Command::SetPatch(snd.patch));
+                // Volumen bajo para que el limitador no iguale los sonidos.
+                e.handle(Command::SetParam(Param::Volume(0.3)));
+                for n in [48, 52, 55, 60] {
+                    e.handle(on(n));
+                }
+                let buf = render(&mut e, 1.0);
+                let rms = (buf.iter().map(|s| s * s).sum::<f32>() / buf.len() as f32).sqrt();
+                (snd.name, rms)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn todos_los_sonidos_suenan_parecido_de_fuerte() {
+        let l = loudness();
+        let mut v: Vec<f32> = l.iter().map(|x| x.1).collect();
+        v.sort_by(f32::total_cmp);
+        let median = v[v.len() / 2];
+        for (name, rms) in &l {
+            let ratio = rms / median;
+            assert!(
+                (0.3..3.0).contains(&ratio),
+                "{name}: {rms:.4} ({ratio:.2}× la mediana {median:.4})"
+            );
+        }
+    }
+
+    #[test]
+    fn todos_los_sonidos_se_apagan() {
+        for snd in SOUNDS {
+            let mut e = Engine::new(48_000.0);
+            e.handle(Command::SetPatch(snd.patch));
+            e.handle(on(60));
+            render(&mut e, 0.5);
+            e.handle(Command::NoteOff { note: 60 });
+            render(&mut e, 10.0);
+            assert_eq!(e.active_voices(), 0, "{}", snd.name);
+        }
     }
 
     #[test]

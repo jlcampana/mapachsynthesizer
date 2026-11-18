@@ -113,6 +113,12 @@ pub const KITS: [Kit; 4] = [
 #[derive(Debug, Clone, Copy)]
 pub struct Noise(u32);
 
+impl Default for Noise {
+    fn default() -> Self {
+        Noise::new(1)
+    }
+}
+
 impl Noise {
     pub fn new(seed: u32) -> Self {
         Self(seed.max(1))
