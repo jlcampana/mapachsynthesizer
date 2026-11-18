@@ -300,7 +300,7 @@ pub struct State {
     pub bass: bool,
     /// Enseñar nombres de acordes y notas (por defecto no: solo colores).
     pub show_names: bool,
-    /// Colores por nota (Do rojo, Re naranja…) en vez de por tecla.
+    /// Colores por nota (Do rojo, Re naranja…) en vez de por tecla. Activado por defecto.
     pub note_colors: bool,
     pub play_mode: PlayMode,
     pub arp_pattern: usize,
@@ -397,7 +397,7 @@ impl Default for State {
             bpm: 120.0,
             bass: true,
             show_names: false,
-            note_colors: false,
+            note_colors: true,
             play_mode: PlayMode::Tocar,
             arp_pattern: 0,
             arp_rate: 3,

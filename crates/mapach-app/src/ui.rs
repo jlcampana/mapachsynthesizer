@@ -193,7 +193,16 @@ fn top_bar(c: &Canvas, st: &State) {
     };
     pill(c, 196.0, 200.0, MENU_GRIS, &tono, BLANCO);
     if !st.show_names {
-        c.circle(216.0, 50.0, 11.0, color_tonalidad(st.key.tonic));
+        c.circle(
+            216.0,
+            50.0,
+            11.0,
+            if st.note_colors {
+                note_color(st.key.tonic)
+            } else {
+                color_tonalidad(st.key.tonic)
+            },
+        );
         c.ring(216.0, 50.0, 11.0, 2.0, BLANCO);
     }
 

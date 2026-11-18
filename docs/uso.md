@@ -79,7 +79,8 @@ Información del audio y del mando, y:
 - **Volumen máximo** (−24 a −3 dBFS, −12 por defecto): el techo que nada puede pasar.
 - **Nombres de acordes**: enseñar "Do", "Lam7"… en vez de números.
 - **Colores por nota**: Do rojo, Re naranja, Mi amarillo, Fa verde, Sol turquesa, La morado, Si rosa
-  (los colores de los tubos y campanas de clase), en vez de un arcoíris por tecla.
+  (los colores de los tubos y campanas de clase). Viene activado; si se quita, cada tecla lleva su
+  color del arcoíris aunque cambie la tonalidad.
 - **Arrancar al encender**: abre Mapachsynthesizer al iniciar sesión.
 - **Aprender mando** y **Mando de serie**.
 - `Q` sale del programa; `Esc` vuelve.

@@ -186,6 +186,16 @@ impl Captura {
                 p(Chord(0)),
                 r(Chord(0)),
             ],
+            // Sol mayor con colores por nota: la tecla 1 sale turquesa.
+            18 => {
+                let mut v = vec![p(Menu(M::Tono))];
+                for _ in 0..7 {
+                    v.push(p(Arrow(A::Right)));
+                    v.push(r(Arrow(A::Right)));
+                }
+                v.extend([r(Menu(M::Tono)), p(Chord(0))]);
+                v
+            }
             _ => vec![],
         }
     }
