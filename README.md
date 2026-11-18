@@ -17,7 +17,7 @@ Con él se puede:
 
 ## Estado
 
-🎹 **Ya se puede tocar.** Están hechas las fases 0 a 7 y 9 del [plan](docs/plan.md#5-fases-y-entregables):
+🎹 **Ya se puede tocar.** Están hechas las fases 0 a 9 del [plan](docs/plan.md#5-fases-y-entregables):
 
 - Los 7 acordes de colores con voice leading, las flechas y la perilla mágica para cambiarles el
   color, y la fila `Q`…`U` una octava más aguda.
@@ -34,8 +34,13 @@ Con él se puede:
 - Limitador a −12 dBFS al final de todo y ajustes que se guardan solos.
 - Modo papá (`Ctrl+Alt+P`), el único sitio desde donde se sale (`Q`).
 
-**Falta:** el asistente "Aprender mando", el taller de samples (con el sampler) y el pulido final
-(juegos, modo kiosco con arranque automático).
+- **Taller de samples** (`Tab`): grabar con el micro, importar de `Música/Mapachsynthesizer/Importar`,
+  10 botones de destrozar con deshacer, y usar el sonido en los acordes ("Mi sample").
+- Presets `F1`–`F4` (pulsar carga, mantener guarda).
+- Modo papá con volumen máximo y arranque al encender.
+
+**Falta:** el asistente "Aprender mando", los juegos (oído, ritmo) y más pulido. El micro no se ha
+probado con hardware real.
 
 ## Compilar y tocar
 
