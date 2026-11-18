@@ -213,9 +213,9 @@ Cada fase termina con algo que el niño ya puede tocar.
 Orden de prioridad si hay que recortar: 0 → 1 → 2 → 4 → 6 → 7 → 9 → 3 → 5 → 8 → 10.
 
 **Estado (18-11-2026):** fases 0 a 9 hechas en una primera versión. De la 10 están el aleatorio, el
-juego de oído, el modo papá con arranque automático y los paquetes `.deb`/`.rpm`. Faltan el juego de
-ritmo, las animaciones, las ideas de Rainbow mode. La guía de
-uso está en [uso.md](uso.md).
+juego de oído, el modo papá con arranque automático y los paquetes `.deb`/`.rpm`. También están los samples
+como golpes de batería. Faltan el juego de ritmo, las animaciones y las ideas de Rainbow mode. La
+guía de uso está en [uso.md](uso.md).
 
 ### Calidad
 - Tests unitarios en `mapach-theory` (cada acorde y modificador) y en `mapach-dsp`
