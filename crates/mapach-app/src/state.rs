@@ -127,6 +127,21 @@ pub enum SongFocus {
     Export(usize),
 }
 
+/// Juego de oído: suena un acorde y hay que adivinar su tecla.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EarGame {
+    /// Tecla que hay que adivinar (0–6).
+    pub target: u8,
+    /// Cuántas teclas entran en juego (empieza con 3 y sube al acertar).
+    pub level: u8,
+    pub score: u32,
+    pub fails: u32,
+    /// Hasta cuándo suena el acorde del juego.
+    pub playing_until: Option<f64>,
+    /// Último intento: acierto o fallo, y hasta cuándo se enseña.
+    pub feedback: Option<(bool, f64)>,
+}
+
 /// Lo que suena ahora en modo Tocar.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sounding {
@@ -163,6 +178,8 @@ pub enum Item {
     Efecto,
     Cantidad,
     Sala,
+    /// Empieza el juego de oído.
+    Juego,
 }
 
 impl Item {
@@ -196,6 +213,7 @@ impl Item {
                 Item::Kit,
                 Item::Estilo,
                 Item::Variacion,
+                Item::Juego,
             ],
         }
     }
@@ -224,6 +242,7 @@ impl Item {
             Item::Efecto => "Efecto",
             Item::Cantidad => "Cantidad",
             Item::Sala => "Sala",
+            Item::Juego => "Juego de oído",
         }
     }
 }
@@ -274,6 +293,8 @@ pub struct State {
     pub song_focus: SongFocus,
     /// Canciones en la lista (lo dice la app al leer la carpeta).
     pub song_count: usize,
+    /// Juego de oído en marcha.
+    pub game: Option<EarGame>,
     /// Volumen máximo en dBFS (techo del limitador; se cambia en el modo papá).
     pub max_db: f32,
     /// Presets rápidos F1–F4 (como P1–P4 del HiChord).
@@ -355,6 +376,7 @@ impl Default for State {
             screen: Screen::Tocar,
             song_focus: SongFocus::Card(0),
             song_count: 0,
+            game: None,
             max_db: mapach_engine::DEFAULT_MAX_DB,
             presets: Default::default(),
             preset_hold: None,
@@ -603,6 +625,7 @@ impl State {
             self.track_hold = None;
             self.clear_track(t, &mut out);
         }
+        self.game_tick(now, &mut out);
         if let Some((p, since)) = self.preset_hold
             && now - since >= Self::HOLD_TO_CLEAR
         {
@@ -814,6 +837,35 @@ impl State {
         }
         if self.screen == Screen::Taller && self.taller_press(c) {
             return;
+        }
+        if self.game.is_some() {
+            match c {
+                Control::Chord(b) if (b as usize) < BUTTONS => {
+                    // Suena lo que ha elegido y se comprueba.
+                    self.game_guess(b, out);
+                }
+                Control::Play | Control::Record => {
+                    self.play_game_chord(out);
+                    return;
+                }
+                Control::KnobPress(Knob::Magica)
+                | Control::Menu(_)
+                | Control::Canciones
+                | Control::Taller => {
+                    self.game = None;
+                    out.push(Command::ChordOff);
+                    if matches!(c, Control::Menu(_)) {
+                        // Que soltarlo no abra la página.
+                        self.menu_used = true;
+                        self.menus_held[menu_idx(match c {
+                            Control::Menu(m) => m,
+                            _ => Menu::Tono,
+                        })] = true;
+                    }
+                    return;
+                }
+                _ => {}
+            }
         }
         match c {
             Control::Canciones => self.open_songs(),
@@ -1228,6 +1280,7 @@ impl State {
                 self.reverb = (self.reverb + d as f32 * 0.05).clamp(0.0, 1.0);
                 out.push(Command::SetReverb(self.reverb));
             }
+            Item::Juego => self.start_game(out),
         }
     }
 
@@ -1262,6 +1315,98 @@ impl State {
     }
 
     /// 🎲: valores al azar para el menú.
+    fn next_rand(&mut self, n: usize) -> usize {
+        self.rng ^= self.rng << 13;
+        self.rng ^= self.rng >> 17;
+        self.rng ^= self.rng << 5;
+        self.rng as usize % n.max(1)
+    }
+
+    /// Empieza el juego de oído (en modo Tocar).
+    fn start_game(&mut self, out: &mut Vec<Command>) {
+        self.open_menu = None;
+        self.set_play_mode(PlayMode::Tocar, out);
+        self.game = Some(EarGame {
+            target: 0,
+            level: 3,
+            score: 0,
+            fails: 0,
+            playing_until: None,
+            feedback: None,
+        });
+        self.new_round(out);
+    }
+
+    fn new_round(&mut self, out: &mut Vec<Command>) {
+        let Some(level) = self.game.as_ref().map(|g| g.level) else {
+            return;
+        };
+        let prev = self.game.as_ref().map(|g| g.target);
+        let mut t = self.next_rand(level as usize) as u8;
+        if Some(t) == prev && level > 1 {
+            t = (t + 1) % level;
+        }
+        if let Some(g) = &mut self.game {
+            g.target = t;
+        }
+        self.play_game_chord(out);
+    }
+
+    /// Hace sonar el acorde que hay que adivinar.
+    fn play_game_chord(&mut self, out: &mut Vec<Command>) {
+        let Some(t) = self.game.as_ref().map(|g| g.target) else {
+            return;
+        };
+        self.knob_color = 0;
+        self.play_chord(t, false, true, out);
+        // Que no se vea cuál es: no es una tecla pulsada.
+        self.current = None;
+        if let Some(g) = &mut self.game {
+            g.playing_until = Some(self.now + 1.2);
+        }
+    }
+
+    /// Respuesta del niño en el juego.
+    fn game_guess(&mut self, b: u8, out: &mut Vec<Command>) {
+        let now = self.now;
+        let Some(g) = &mut self.game else { return };
+        let ok = b == g.target;
+        g.feedback = Some((ok, now + 1.2));
+        if ok {
+            g.score += 1;
+            // Cada 3 aciertos entra una tecla más, hasta las 7.
+            if g.score.is_multiple_of(3) && g.level < 7 {
+                g.level += 1;
+            }
+        } else {
+            g.fails += 1;
+        }
+        // Al acertar, la siguiente suena cuando acaba el mensaje.
+        if ok {
+            g.playing_until = None;
+            out.push(Command::ChordOff);
+        }
+    }
+
+    fn game_tick(&mut self, now: f64, out: &mut Vec<Command>) {
+        let Some(g) = &mut self.game else { return };
+        if let Some(until) = g.playing_until
+            && now >= until
+            && self.held.is_empty()
+        {
+            g.playing_until = None;
+            out.push(Command::ChordOff);
+        }
+        if let Some((ok, until)) = g.feedback
+            && now >= until
+        {
+            g.feedback = None;
+            if ok {
+                self.new_round(out);
+            }
+        }
+    }
+
     fn randomize(&mut self, m: Menu, out: &mut Vec<Command>) {
         let mut r = |n: usize| {
             // xorshift32
@@ -1812,6 +1957,41 @@ mod tests {
         press(&mut s, Control::Preset(3));
         let c = release(&mut s, Control::Preset(3));
         assert!(c.is_empty());
+    }
+
+    #[test]
+    fn juego_de_oido() {
+        let mut s = State::default();
+        s.sync(LooperStatus::default(), 0.0);
+        let mut out = Vec::new();
+        s.change(Item::Juego, 1, &mut out);
+        let g = s.game.clone().unwrap();
+        assert!(g.target < 3);
+        assert!(chord(&out).is_some(), "suena el acorde del juego");
+        assert!(s.current.is_none(), "no se ve cuál es");
+        // Fallo.
+        let wrong = (g.target + 1) % 3;
+        press(&mut s, Control::Chord(wrong));
+        release(&mut s, Control::Chord(wrong));
+        assert_eq!(s.game.as_ref().unwrap().fails, 1);
+        // Acierto: tras el mensaje suena otro.
+        press(&mut s, Control::Chord(g.target));
+        release(&mut s, Control::Chord(g.target));
+        assert_eq!(s.game.as_ref().unwrap().score, 1);
+        let c = s.sync(LooperStatus::default(), 5.0);
+        assert!(chord(&c).is_some());
+        // Tres aciertos: una tecla más.
+        for _ in 0..2 {
+            let t = s.game.as_ref().unwrap().target;
+            press(&mut s, Control::Chord(t));
+            release(&mut s, Control::Chord(t));
+            let now = s.now + 5.0;
+            s.sync(LooperStatus::default(), now);
+        }
+        assert_eq!(s.game.as_ref().unwrap().level, 4);
+        // La perilla mágica sale.
+        press(&mut s, Control::KnobPress(Knob::Magica));
+        assert!(s.game.is_none());
     }
 
     #[test]

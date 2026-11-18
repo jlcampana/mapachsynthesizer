@@ -163,6 +163,12 @@ impl Captura {
             11 => vec![p(Canciones), p(Arrow(A::Right))],
             12 => vec![p(Canciones), p(Arrow(A::Down)), p(Arrow(A::Right))],
             13 => vec![p(Taller)],
+            15 => {
+                let mut v = vec![p(Menu(M::Modo)), r(Menu(M::Modo))];
+                v.push(p(Arrow(A::Up)));
+                v.push(p(Arrow(A::Right)));
+                v
+            }
             _ => vec![],
         }
     }

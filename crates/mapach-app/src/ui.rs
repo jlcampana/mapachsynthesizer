@@ -277,6 +277,8 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
         .or(st.open_menu.map(|o| (o.menu, Some(o.item))));
     if let Some((m, sel)) = menu {
         menu_page(c, st, m, sel);
+    } else if let Some(g) = &st.game {
+        game_view(c, g, extra);
     } else if st.looper_visible() {
         looper_view(c, st, extra);
         return;
@@ -714,6 +716,7 @@ fn value_text(st: &State, item: Item) -> String {
         Item::Efecto => format!("{} {}", st.effect.icon(), st.effect.name()),
         Item::Cantidad => format!("{:.0} %", st.effect_amount * 100.0),
         Item::Sala => format!("{:.0} %", st.reverb * 100.0),
+        Item::Juego => "▶".to_string(),
     }
 }
 
@@ -818,6 +821,74 @@ fn joystick(c: &Canvas, st: &State) {
 
 const LETRAS: [&str; 7] = ["A", "S", "D", "F", "G", "H", "J"];
 const ROMANOS: [&str; 7] = ["I", "ii", "iii", "IV", "V", "vi", "vii"];
+
+/// Juego de oído.
+fn game_view(c: &Canvas, g: &crate::state::EarGame, extra: &Extra) {
+    c.text(
+        430.0,
+        116.0,
+        Align2::CENTER_CENTER,
+        "🎧 ¿Qué color suena?",
+        26.0,
+        NEON_AMARILLO,
+    );
+    match g.feedback {
+        Some((true, _)) => {
+            c.circle(430.0, 186.0, 46.0, hex(0x2ED573));
+            c.text(430.0, 186.0, Align2::CENTER_CENTER, "✔", 54.0, BLANCO);
+            c.text(530.0, 186.0, Align2::LEFT_CENTER, "¡Bien!", 30.0, NEON_CIAN);
+        }
+        Some((false, _)) => {
+            c.circle(430.0, 186.0, 46.0, MENU_ROJO);
+            c.text(430.0, 186.0, Align2::CENTER_CENTER, "✖", 50.0, BLANCO);
+            c.text(
+                530.0,
+                186.0,
+                Align2::LEFT_CENTER,
+                "¡Otra vez!",
+                26.0,
+                NEON_CIAN,
+            );
+        }
+        None => {
+            // Las teclas que entran en juego.
+            for i in 0..g.level as usize {
+                let x = 430.0 + (i as f32 - (g.level as f32 - 1.0) / 2.0) * 44.0;
+                let pulse = if g.playing_until.is_some() {
+                    4.0 * ((extra.time * 6.0).sin() as f32 * 0.5 + 0.5)
+                } else {
+                    0.0
+                };
+                c.circle(x, 186.0, 17.0 + pulse, ACORDES[i]);
+                c.text(
+                    x,
+                    186.0,
+                    Align2::CENTER_CENTER,
+                    i + 1,
+                    16.0,
+                    texto_sobre(ACORDES[i]),
+                );
+            }
+        }
+    }
+    let stars = "⭐".repeat((g.score as usize).min(12));
+    c.text(
+        430.0,
+        250.0,
+        Align2::CENTER_CENTER,
+        stars,
+        18.0,
+        NEON_AMARILLO,
+    );
+    c.text(
+        430.0,
+        276.0,
+        Align2::CENTER_CENTER,
+        "Intro: otra vez · perilla o menú: salir",
+        13.0,
+        NEON_CIAN.gamma_multiply(0.7),
+    );
+}
 
 /// 16 puntos con el paso que suena.
 fn step_dots(c: &Canvas, pattern: &[u8; 16], step: Option<usize>, y: f32) {
