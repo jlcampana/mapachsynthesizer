@@ -17,13 +17,13 @@ Con él se puede:
 
 ## Estado
 
-🎹 **Ya se puede tocar.** Están hechas las fases 0, 1, 2, 4, 6, 7 y 9 del [plan](docs/plan.md#5-fases-y-entregables):
+🎹 **Ya se puede tocar.** Están hechas las fases 0 a 7 y 9 del [plan](docs/plan.md#5-fases-y-entregables):
 
 - Los 7 acordes de colores con voice leading, las flechas y la perilla mágica para cambiarles el
   color, y la fila `Q`…`U` una octava más aguda.
 - Menús gris (tono), amarillo (sonido) y rojo (modo). Se abren al pulsar y soltar; si se mantienen,
   hacen atajos con las flechas y las perillas, y con `Espacio` ponen valores al azar 🎲.
-- 8 sonidos de analógico virtual, con ataque, release y brillo.
+- 20 sonidos (analógico, FM, órgano, ruido y voces) y efectos (sala, eco, coro, distorsión, robot…).
 - Modos Tocar, Rasgueo, Arpegio (6 patrones), Repetir, Zumbido y Melodía, con tempo y tap tempo (`B`).
 - **Batería** sintetizada (4 kits), **56 ritmos** y **secuenciador de 16 pasos**.
 - **Looper de 6 pistas**: `Espacio` graba, `1`–`6` eligen pista, mantener una pista 1,5 s la
@@ -34,8 +34,8 @@ Con él se puede:
 - Limitador a −12 dBFS al final de todo y ajustes que se guardan solos.
 - Modo papá (`Ctrl+Alt+P`), el único sitio desde donde se sale (`Q`).
 
-**Falta:** el asistente "Aprender mando", más motores de sonido (FM, samples…), efectos, el taller
-de samples y los paquetes `.deb` y `.rpm`.
+**Falta:** el asistente "Aprender mando", el taller de samples (con el sampler) y el pulido final
+(juegos, modo kiosco con arranque automático).
 
 ## Compilar y tocar
 
@@ -64,7 +64,20 @@ cargo run --release -p mapach-app -- --ventana   # en una ventana
 | `F5` | Mis canciones |
 | `Ctrl+Alt+P` | Modo papá (salir con `Q`) |
 
-Para depurar sin sonido: `mapach-app --ventana --captura salida.ppm --demo 1` guarda una captura
+### Instalar en el ordenador del niño
+
+Cada versión publica en [Releases](https://github.com/jlcampana/mapachsynthesizer/releases) un
+`.deb` (Ubuntu/Debian) y un `.rpm` (Fedora). Instalan el programa, su icono en el menú y la regla
+udev del mando (después hay que desenchufar y volver a enchufar el mando).
+
+```bash
+sudo apt install ./mapachsynthesizer_*.deb    # Ubuntu
+sudo dnf install ./mapachsynthesizer-*.rpm    # Fedora
+```
+
+Para generar una versión: `git tag v0.1.0 && git push origin v0.1.0`.
+
+Para depurar sin sonido: `mapachsynthesizer --ventana --captura salida.ppm --demo 1` guarda una captura
 de la pantalla (escenas 0–12).
 
 ### Documentos

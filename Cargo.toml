@@ -14,3 +14,8 @@ chunks_exact_to_as_chunks = "allow"
 too_many_arguments = "allow"
 # Recorrer por índice varias tablas a la vez (pistas, volúmenes…) se lee mejor así.
 needless_range_loop = "allow"
+
+[profile.release]
+# Binario más pequeño y algo más rápido para los paquetes.
+lto = "thin"
+strip = true

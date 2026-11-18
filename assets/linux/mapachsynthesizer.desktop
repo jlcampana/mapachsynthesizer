@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Mapachsynthesizer
+GenericName=Sintetizador para niños
+Comment=Toca acordes de colores, haz ritmos y graba canciones
+Exec=mapachsynthesizer
+Icon=mapachsynthesizer
+Terminal=false
+Categories=AudioVideo;Audio;Music;Education;
+Keywords=sintetizador;música;acordes;niños;synth;
+StartupWMClass=mapachsynthesizer

@@ -1,0 +1,36 @@
+name: Release
+
+# Al subir una etiqueta v0.1.0, v0.2.0…: compila y publica los paquetes .deb y .rpm.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  paquetes:
+    name: Paquetes .deb y .rpm
+    # Ubuntu 24.04: la glibc más antigua que soportamos, para que el .deb funcione también
+    # en versiones más nuevas.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias del sistema
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libxkbcommon-dev libwayland-dev dpkg-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Herramientas de empaquetado
+        run: cargo install cargo-deb cargo-generate-rpm --locked
+      - name: Tests
+        run: cargo test --all
+      - name: .deb
+        run: cargo deb -p mapach-app
+      - name: .rpm
+        run: cargo generate-rpm -p crates/mapach-app
+      - name: Publicar
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/debian/*.deb
+            target/generate-rpm/*.rpm

@@ -1,7 +1,14 @@
 [package]
 name = "mapach-app"
-version = "0.1.0"
-edition = "2024"
+description = "Sintetizador para niños: acordes de colores, ritmos, looper y canciones"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository = "https://github.com/jlcampana/mapachsynthesizer"
+
+[[bin]]
+name = "mapachsynthesizer"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.104"
@@ -18,3 +25,33 @@ serde = { version = "1.0.229", features = ["derive"] }
 
 [lints]
 workspace = true
+
+# Paquete .deb (Ubuntu/Debian): `cargo deb -p mapach-app`
+[package.metadata.deb]
+name = "mapachsynthesizer"
+maintainer = "Mapachsynthesizer"
+copyright = "Mapachsynthesizer"
+section = "sound"
+priority = "optional"
+extended-description = "Sintetizador para niños inspirado en el HiChord: 7 acordes que siempre suenan bien, batería y ritmos, looper de 6 pistas y canciones que se exportan a MP3, OGG o WAV. Se toca con el teclado del ordenador o con un macropad de 16 teclas y 3 perillas."
+# Las dependencias (libasound2 o libasound2t64, libc…) las calcula dpkg-shlibdeps.
+depends = "$auto"
+assets = [
+    ["target/release/mapachsynthesizer", "usr/bin/", "755"],
+    ["../../assets/linux/mapachsynthesizer.desktop", "usr/share/applications/", "644"],
+    ["../../assets/linux/mapachsynthesizer.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+    ["../../config/70-mapachsynthesizer-mando.rules", "usr/lib/udev/rules.d/", "644"],
+]
+maintainer-scripts = "../../assets/linux/deb"
+
+# Paquete .rpm (Fedora): `cargo generate-rpm -p crates/mapach-app`
+[package.metadata.generate-rpm]
+name = "mapachsynthesizer"
+summary = "Sintetizador para niños"
+assets = [
+    { source = "target/release/mapachsynthesizer", dest = "/usr/bin/mapachsynthesizer", mode = "755" },
+    { source = "assets/linux/mapachsynthesizer.desktop", dest = "/usr/share/applications/mapachsynthesizer.desktop", mode = "644" },
+    { source = "assets/linux/mapachsynthesizer.svg", dest = "/usr/share/icons/hicolor/scalable/apps/mapachsynthesizer.svg", mode = "644" },
+    { source = "config/70-mapachsynthesizer-mando.rules", dest = "/usr/lib/udev/rules.d/70-mapachsynthesizer-mando.rules", mode = "644" },
+]
+post_install_script = "udevadm control --reload-rules >/dev/null 2>&1 || :; udevadm trigger >/dev/null 2>&1 || :"
