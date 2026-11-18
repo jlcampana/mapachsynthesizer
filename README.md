@@ -39,8 +39,9 @@ Con él se puede:
 - Presets `F1`–`F4` (pulsar carga, mantener guarda).
 - Modo papá con volumen máximo y arranque al encender.
 
-**Falta:** el asistente "Aprender mando", los juegos (oído, ritmo) y más pulido. El micro no se ha
-probado con hardware real.
+- Juego de oído (menú rojo), colores fijados en las teclas 🔒 y asistente "Aprender mando".
+
+**Falta:** el juego de ritmo, animaciones y más pulido. El micro no se ha probado con hardware real.
 
 ## Compilar y tocar
 
@@ -87,6 +88,7 @@ de la pantalla (escenas 0–12).
 
 ### Documentos
 
+- [Cómo se usa](docs/uso.md): teclas, menús, modos, looper, canciones, taller y modo papá.
 - [Investigación](docs/investigacion.md): qué hacen el HiChord y el FM-1, la perilla de AliExpress y las crates de Rust, y los firmwares de la comunidad del FM-1 (fm1-chord, Rainbow mode).
 - [Plan](docs/plan.md): principios, mapa de teclas, funciones, arquitectura, fases y preguntas abiertas.
 - [Mando](docs/mando.md): mapeo del macropad de 16 teclas y 3 perillas. Ya está programado con [`herramientas/mando.py`](herramientas/mando.py).
