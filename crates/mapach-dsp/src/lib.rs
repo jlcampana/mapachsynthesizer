@@ -4,6 +4,7 @@
 //! usarse en el hilo de audio.
 
 pub mod drums;
+pub mod effects;
 pub mod envelope;
 pub mod filter;
 pub mod limiter;

@@ -190,7 +190,11 @@ fn top_bar(c: &Canvas, st: &State) {
         506.0,
         50.0,
         Align2::CENTER_CENTER,
-        format!("{} {}", s.icon, s.name),
+        if st.effect == mapach_dsp::effects::Effect::Ninguno {
+            format!("{} {}", s.icon, s.name)
+        } else {
+            format!("{} {} · {}", s.icon, s.name, st.effect.icon())
+        },
         19.0,
         MARRON,
     );
@@ -611,7 +615,7 @@ fn menu_page(c: &Canvas, st: &State, m: Menu, sel: Option<usize>) {
             ],
             Menu::Sonido => &[
                 "← →  sonido",
-                "↑ ↓  brillo",
+                "↑ ↓  efecto",
                 "Espacio  🎲 al azar",
                 "Suelta para ver más",
             ],
@@ -693,6 +697,9 @@ fn value_text(st: &State, item: Item) -> String {
         Item::Estilo => st.rhythm_name(),
         Item::Variacion => VARIATIONS[st.drum_variation].to_string(),
         Item::Canciones => "▶".to_string(),
+        Item::Efecto => format!("{} {}", st.effect.icon(), st.effect.name()),
+        Item::Cantidad => format!("{:.0} %", st.effect_amount * 100.0),
+        Item::Sala => format!("{:.0} %", st.reverb * 100.0),
     }
 }
 

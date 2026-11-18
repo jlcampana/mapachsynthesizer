@@ -3,6 +3,7 @@
 //! No depende de `egui` ni de `cpal`, así que se prueba con tests normales.
 
 use mapach_dsp::drums::KITS;
+use mapach_dsp::effects::Effect;
 use mapach_engine::drums::{self, Pattern, STEPS, STYLES, VARIATIONS};
 use mapach_engine::looper::{LooperStatus, TRACKS};
 use mapach_engine::{ARP_PATTERNS, Command, Param, RATES, SOUNDS, STRUM_MS, Style};
@@ -144,6 +145,9 @@ pub enum Item {
     Variacion,
     /// Abre la pantalla de canciones (para llegar desde el mando).
     Canciones,
+    Efecto,
+    Cantidad,
+    Sala,
 }
 
 impl Item {
@@ -159,7 +163,15 @@ impl Item {
                 Item::Nombres,
                 Item::Canciones,
             ],
-            Menu::Sonido => &[Item::Sonido, Item::Ataque, Item::Release, Item::Brillo],
+            Menu::Sonido => &[
+                Item::Sonido,
+                Item::Efecto,
+                Item::Cantidad,
+                Item::Sala,
+                Item::Ataque,
+                Item::Release,
+                Item::Brillo,
+            ],
             Menu::Modo => &[
                 Item::Modo,
                 Item::Tempo,
@@ -194,6 +206,9 @@ impl Item {
             Item::Estilo => "Ritmo",
             Item::Variacion => "Variación",
             Item::Canciones => "Mis canciones",
+            Item::Efecto => "Efecto",
+            Item::Cantidad => "Cantidad",
+            Item::Sala => "Sala",
         }
     }
 }
@@ -227,6 +242,9 @@ pub struct State {
     pub arp_rate: usize,
     pub strum_speed: usize,
     pub repeat_rate: usize,
+    pub effect: Effect,
+    pub effect_amount: f32,
+    pub reverb: f32,
     pub kit: usize,
     /// Estilo de ritmo; `STYLES.len()` es "Mi ritmo" (el del secuenciador).
     pub drum_style: usize,
@@ -296,6 +314,9 @@ impl Default for State {
             arp_rate: 3,
             strum_speed: 1,
             repeat_rate: 1,
+            effect: Effect::Ninguno,
+            effect_amount: 0.5,
+            reverb: 0.15,
             kit: 0,
             drum_style: 0,
             drum_variation: 0,
@@ -365,6 +386,9 @@ impl State {
             Command::SetBpm(self.bpm),
             Command::SetKit(self.kit as u8),
             Command::SetPattern(self.drum_pattern()),
+            Command::SetEffect(self.effect),
+            Command::SetEffectAmount(self.effect_amount),
+            Command::SetReverb(self.reverb),
         ]
     }
 
@@ -564,6 +588,7 @@ impl State {
                 Item::Figura => matches!(self.play_mode, PlayMode::Arpegio | PlayMode::Repetir),
                 Item::Velocidad => self.play_mode == PlayMode::Rasgueo,
                 Item::Kit => self.play_mode.is_drums(),
+                Item::Cantidad => self.effect != Effect::Ninguno,
                 Item::Estilo | Item::Variacion => self.play_mode == PlayMode::Ritmos,
                 _ => true,
             })
@@ -889,6 +914,7 @@ impl State {
                 }
             }
             (Knob::Tempo, Some(Menu::Tono)) => self.change(Item::Octava, d, out),
+            (Knob::Tempo, Some(Menu::Sonido)) => self.change(Item::Cantidad, d, out),
             (Knob::Tempo, Some(Menu::Modo)) => {
                 let item = match self.play_mode {
                     PlayMode::Arpegio => Item::Patron,
@@ -913,7 +939,7 @@ impl State {
             (Menu::Tono, Arrow::Left | Arrow::Right) => Item::Tonalidad,
             (Menu::Tono, _) => Item::Octava,
             (Menu::Sonido, Arrow::Left | Arrow::Right) => Item::Sonido,
-            (Menu::Sonido, _) => Item::Brillo,
+            (Menu::Sonido, _) => Item::Efecto,
             (Menu::Modo, Arrow::Left | Arrow::Right) => Item::Modo,
             (Menu::Modo, _) => {
                 self.change(Item::Tempo, d * 5, out);
@@ -1036,6 +1062,22 @@ impl State {
                 out.push(Command::SetPattern(self.drum_pattern()));
             }
             Item::Canciones => self.open_songs(),
+            Item::Efecto => {
+                let i = Effect::ALL
+                    .iter()
+                    .position(|&e| e == self.effect)
+                    .unwrap_or(0);
+                self.effect = Effect::ALL[wrap(i, d, Effect::ALL.len())];
+                out.push(Command::SetEffect(self.effect));
+            }
+            Item::Cantidad => {
+                self.effect_amount = (self.effect_amount + d as f32 * 0.05).clamp(0.0, 1.0);
+                out.push(Command::SetEffectAmount(self.effect_amount));
+            }
+            Item::Sala => {
+                self.reverb = (self.reverb + d as f32 * 0.05).clamp(0.0, 1.0);
+                out.push(Command::SetReverb(self.reverb));
+            }
         }
     }
 
@@ -1091,10 +1133,16 @@ impl State {
             Menu::Sonido => {
                 let s = r(SOUNDS.len());
                 let b = r(100) as f32 / 100.0;
+                let fx = r(Effect::ALL.len());
+                let amt = r(100) as f32 / 100.0;
                 self.sound = s;
                 self.apply_sound(out);
                 self.brightness = 0.25 + b * 0.6;
                 out.push(Command::SetParam(Param::Brightness(self.brightness)));
+                self.effect = Effect::ALL[fx];
+                self.effect_amount = 0.2 + amt * 0.6;
+                out.push(Command::SetEffect(self.effect));
+                out.push(Command::SetEffectAmount(self.effect_amount));
             }
             Menu::Modo => {
                 let bpm = 70.0 + r(100) as f32;
@@ -1292,7 +1340,7 @@ mod tests {
         assert!(matches!(c[0], Command::SetPatch(_)));
         // Abajo: siguiente opción.
         press(&mut s, Control::Arrow(Arrow::Down));
-        assert_eq!(s.selected_item(), Some(Item::Ataque));
+        assert_eq!(s.selected_item(), Some(Item::Efecto));
         // Volver a pulsar el menú lo cierra.
         let _ = s.selected_item();
         press(&mut s, Control::Menu(Menu::Sonido));
@@ -1595,6 +1643,20 @@ mod tests {
         let mut s = State::default();
         s.change(Item::Canciones, 1, &mut Vec::new());
         assert_eq!(s.screen, Screen::Canciones);
+    }
+
+    #[test]
+    fn efectos_desde_el_menu_amarillo() {
+        let mut s = State::default();
+        assert!(!s.items(Menu::Sonido).contains(&Item::Cantidad));
+        press(&mut s, Control::Menu(Menu::Sonido));
+        let c = press(&mut s, Control::Arrow(Arrow::Up));
+        assert_eq!(s.effect, Effect::Eco);
+        assert_eq!(c, [Command::SetEffect(Effect::Eco)]);
+        let c = s.handle(Event::Turn(Knob::Tempo, 2), 0.0);
+        assert_eq!(c, [Command::SetEffectAmount(0.6)]);
+        release(&mut s, Control::Menu(Menu::Sonido));
+        assert!(s.items(Menu::Sonido).contains(&Item::Cantidad));
     }
 
     #[test]

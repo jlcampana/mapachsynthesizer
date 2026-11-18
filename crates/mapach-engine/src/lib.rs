@@ -18,6 +18,7 @@ use drums::{DrumMachine, Pattern};
 use looper::{Looper, LooperStatus};
 use performer::{Out, Performer};
 
+use mapach_dsp::effects::{Effect, FxChain};
 use mapach_dsp::{AdsrParams, Limiter, Smoothed, db_to_gain};
 use voice::Voice;
 
@@ -87,6 +88,11 @@ pub enum Command {
     LoopClear(u8),
     LoopMute(u8, bool),
     LoopVolume(u8, f32),
+    SetEffect(Effect),
+    /// Cantidad del efecto, 0–1.
+    SetEffectAmount(f32),
+    /// Cantidad de sala (reverb), 0–1.
+    SetReverb(f32),
     /// Copia una pista del looper en el búfer (de `looper_capacity() * 2` muestras).
     LoopCopy {
         track: u8,
@@ -178,6 +184,7 @@ pub struct Engine {
     performer: Performer,
     drums: DrumMachine,
     looper: Looper,
+    fx: FxChain,
     bpm: f32,
     /// Respuestas pendientes (como mucho unas pocas: no reserva en el hilo de audio).
     replies: [Option<Reply>; 4],
@@ -200,6 +207,7 @@ impl Engine {
             performer: Performer::new(sample_rate),
             drums: DrumMachine::new(sample_rate),
             looper: Looper::new(sample_rate),
+            fx: FxChain::new(sample_rate),
             bpm: 120.0,
             replies: [None, None, None, None],
             clock: 0,
@@ -280,6 +288,9 @@ impl Engine {
             Command::LoopClear(t) => self.looper.clear(t as usize),
             Command::LoopMute(t, m) => self.looper.set_muted(t as usize, m),
             Command::LoopVolume(t, v) => self.looper.set_volume(t as usize, v),
+            Command::SetEffect(e) => self.fx.set_effect(e),
+            Command::SetEffectAmount(a) => self.fx.amount = a.clamp(0.0, 1.0),
+            Command::SetReverb(r) => self.fx.reverb = r.clamp(0.0, 1.0),
             Command::LoopCopy { track, buf } => {
                 if let Some(back) = self.looper.request_copy(track as usize, buf) {
                     self.reply(Reply::Free(back));
@@ -408,6 +419,8 @@ impl Engine {
                 v.render(block, &self.patch, &self.env, cutoff, self.sample_rate);
             }
             self.drums.render(block, self.bpm);
+            // Los efectos van antes del looper: cada capa se graba con su sonido.
+            self.fx.process(block, self.bpm);
             let bpm = self.drums.is_playing().then_some(self.bpm);
             self.looper.process(block, bpm);
             start += n;
@@ -642,6 +655,26 @@ mod tests {
             e.handle(Command::NoteOff { note: 60 });
             render(&mut e, 10.0);
             assert_eq!(e.active_voices(), 0, "{}", snd.name);
+        }
+    }
+
+    #[test]
+    fn con_todos_los_efectos_no_pasa_del_techo() {
+        for fx in Effect::ALL {
+            let mut e = Engine::new(48_000.0);
+            e.handle(Command::SetParam(Param::Volume(1.0)));
+            e.handle(Command::SetEffect(fx));
+            e.handle(Command::SetEffectAmount(1.0));
+            e.handle(Command::SetReverb(1.0));
+            for n in 0..10u8 {
+                e.handle(on(40 + n * 4));
+            }
+            let buf = render(&mut e, 1.0);
+            let c = db_to_gain(DEFAULT_MAX_DB);
+            assert!(
+                buf.iter().all(|s| s.is_finite() && s.abs() <= c + 1e-6),
+                "{fx:?}"
+            );
         }
     }
 

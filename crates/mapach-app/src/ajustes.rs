@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use mapach_dsp::drums::KITS;
+use mapach_dsp::effects::Effect;
 use mapach_engine::drums::{STYLES, VARIATIONS};
 use mapach_engine::{ARP_PATTERNS, RATES, SOUNDS, STRUM_MS};
 use mapach_theory::{Key, ModifierMode, Scale};
@@ -38,6 +39,9 @@ pub struct Ajustes {
     pub mi_ritmo: Vec<u8>,
     /// Carpeta de la última canción, para abrirla al arrancar ("" = ninguna).
     pub cancion: String,
+    pub efecto: usize,
+    pub cantidad: f32,
+    pub sala: f32,
 }
 
 impl Default for Ajustes {
@@ -75,6 +79,9 @@ impl Ajustes {
             variacion: s.drum_variation,
             mi_ritmo: s.seq_pattern.to_vec(),
             cancion: String::new(),
+            efecto: pos(&Effect::ALL, &s.effect),
+            cantidad: s.effect_amount,
+            sala: s.reverb,
         }
     }
 
@@ -100,6 +107,9 @@ impl Ajustes {
         s.kit = self.kit % KITS.len();
         s.drum_style = self.ritmo % (STYLES.len() + 1);
         s.drum_variation = self.variacion % VARIATIONS.len();
+        s.effect = Effect::ALL[self.efecto % Effect::ALL.len()];
+        s.effect_amount = self.cantidad.clamp(0.0, 1.0);
+        s.reverb = self.sala.clamp(0.0, 1.0);
         for (dst, src) in s.seq_pattern.iter_mut().zip(&self.mi_ritmo) {
             *dst = src & 0x7f;
         }
