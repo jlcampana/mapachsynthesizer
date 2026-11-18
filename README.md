@@ -32,7 +32,7 @@ Con él se puede:
   WAV** en `Música/Mapachsynthesizer/Exportadas`.
 - El mando de 16 teclas y 3 perillas, leído por `evdev` en exclusiva.
 - Limitador a −12 dBFS al final de todo y ajustes que se guardan solos.
-- Modo papá (`Ctrl+Alt+P`), el único sitio desde donde se sale (`Q`).
+- `Esc` cierra el programa. Modo papá (`Ctrl+Alt+P`) para los ajustes.
 
 - **Taller de samples** (`Tab`): grabar con el micro, importar de `Música/Mapachsynthesizer/Importar`,
   10 botones de destrozar con deshacer, y usar el sonido en los acordes ("Mi sample").
@@ -51,8 +51,10 @@ Hace falta Rust (1.88 o más nuevo) y las cabeceras de ALSA:
 sudo dnf install alsa-lib-devel          # Fedora
 sudo apt install libasound2-dev          # Ubuntu / Debian
 
-cargo run --release -p mapach-app                # pantalla completa
-cargo run --release -p mapach-app -- --ventana   # en una ventana
+./build.sh             # compila (target/release/mapachsynthesizer)
+./build.sh --run       # compila y abre a pantalla completa
+./build.sh --ventana   # compila y abre en una ventana
+./build.sh --help      # más opciones: --test, --deb, --rpm
 ```
 
 | Tecla | Qué hace |
@@ -68,7 +70,8 @@ cargo run --release -p mapach-app -- --ventana   # en una ventana
 | `1`–`6` | Elegir pista del looper (mantener: borrarla) |
 | `Intro` | Play / pausa del looper y del ritmo |
 | `F5` | Mis canciones |
-| `Ctrl+Alt+P` | Modo papá (salir con `Q`) |
+| `Esc` | Cerrar el programa |
+| `Ctrl+Alt+P` | Modo papá (ajustes) |
 
 ### Instalar en el ordenador del niño
 

@@ -21,8 +21,7 @@ y los bocetos en [bocetos/](bocetos/README.md).
 5. **Oídos a salvo.** Limitador final obligatorio y volumen máximo configurable
    (por defecto −12 dBFS). Sin picos aunque se sumen 6 pistas con distorsión.
 6. **Sin conexión.** No usa internet, no tiene anuncios ni cuentas.
-7. **Pantalla completa (modo kiosco).** Arranca a pantalla completa y solo se sale con
-   la combinación de "modo papá".
+7. **Pantalla completa.** Arranca a pantalla completa y se cierra con `Esc`.
 
 ---
 
@@ -53,7 +52,8 @@ El teclado imita los controles del HiChord. Ver el boceto
 | `F5` | — | Pantalla de **Canciones** (guardar y exportar) |
 | `B` | Tap tempo | Pulsar 3 o más veces para marcar el tempo |
 | `Retroceso` | — | Deshacer |
-| `Ctrl+Alt+P` | — | Modo papá (ajustes avanzados, salir) |
+| `Esc` | — | Cerrar el programa |
+| `Ctrl+Alt+P` | — | Modo papá (ajustes avanzados) |
 
 ### La perilla
 

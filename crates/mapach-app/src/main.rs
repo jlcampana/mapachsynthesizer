@@ -637,15 +637,19 @@ impl eframe::App for App {
                     }
                     continue;
                 }
+                // Esc cierra el programa (guardando antes).
+                if pressed && key == egui::Key::Escape {
+                    self.release_all();
+                    self.autosave(now, true);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    continue;
+                }
                 if self.papa {
                     if pressed && key == egui::Key::Q {
                         self.autosave(now, true);
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
-                    if pressed
-                        && (key == egui::Key::Escape
-                            || (key == egui::Key::P && modifiers.ctrl && modifiers.alt))
-                    {
+                    if pressed && key == egui::Key::P && modifiers.ctrl && modifiers.alt {
                         self.papa = false;
                     }
                     if pressed {

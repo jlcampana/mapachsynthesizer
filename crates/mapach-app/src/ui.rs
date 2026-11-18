@@ -1697,7 +1697,7 @@ pub fn draw_papa(c: &Canvas, lines: &[String]) {
         480.0,
         468.0,
         Align2::CENTER_CENTER,
-        "Q salir del programa · Esc volver",
+        "Esc salir del programa · Ctrl+Alt+P volver",
         20.0,
         NEON_AMARILLO,
     );

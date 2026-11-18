@@ -83,7 +83,7 @@ Información del audio y del mando, y:
   color del arcoíris aunque cambie la tonalidad.
 - **Arrancar al encender**: abre Mapachsynthesizer al iniciar sesión.
 - **Aprender mando** y **Mando de serie**.
-- `Q` sale del programa; `Esc` vuelve.
+- `Ctrl+Alt+P` vuelve a tocar. `Esc` (en cualquier momento) cierra el programa.
 
 ## Ficheros
 
