@@ -54,7 +54,7 @@ Al cambiar de modo sale unos segundos una frase corta que lo explica, para leerl
 |---|---|---|
 | Pulsar la rueda grande | — | Abre y cierra la vista de loops |
 | Girar la rueda (con la vista abierta) | `1`–`6` | Elige pista |
-| Grabar ● | `Espacio` | Empieza y para la grabación de la pista elegida |
+| Grabar ● | `L` | Empieza y para la grabación de la pista elegida |
 | OK | `Intro` | Sigue o para todos los loops |
 | Pulsar la perilla izquierda (vista abierta) | — | Silencia o devuelve el sonido de la pista elegida |
 | Pulsar la perilla central (vista abierta), dos veces | Mantener `1`–`6` 1,5 s | Borra la pista elegida |
@@ -66,6 +66,13 @@ primera la pista se pone en rojo con "¿Borrar?", y la segunda (antes de 2 s) la
 
 Al abrir la app vuelve la última canción con sus loops, en pausa; para empezar de cero, Mis
 canciones › Nueva.
+
+## Grabar la canción entera (`Espacio`)
+
+La barra espaciadora graba **todo lo que suena** (acordes, batería, loops, atajos, efectos) desde
+que se pulsa hasta que se vuelve a pulsar, como máximo 10 minutos. Mientras tanto, arriba sale
+"Grabando la canción" con el tiempo. Al parar, se guarda un MP3 con el nombre de la canción en
+`Música/Mapachsynthesizer/Exportadas`, con el volumen igualado (no importa cómo estuviera la perilla).
 
 ## Canciones (`F5`)
 

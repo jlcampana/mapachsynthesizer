@@ -44,6 +44,8 @@ pub struct AudioOutput {
     pub replies: rtrb::Consumer<Reply>,
     /// Frames que caben en una pista del looper.
     pub looper_capacity: usize,
+    /// Lo que suena, mientras se graba la canción entera.
+    pub song: rtrb::Consumer<f32>,
     pub stats: Arc<AudioStats>,
     pub sample_rate: u32,
     pub channels: u16,
@@ -55,6 +57,17 @@ impl AudioOutput {
     /// Manda una orden al motor. Si la cola está llena, la orden se pierde (no bloquea nunca).
     pub fn send(&mut self, cmd: Command) {
         let _ = self.commands.push(cmd);
+    }
+
+    /// Saca lo grabado de la canción hasta ahora (estéreo intercalado) y lo añade a `out`.
+    pub fn drain_song(&mut self, out: &mut Vec<f32>) {
+        let n = self.song.slots();
+        if let Ok(chunk) = self.song.read_chunk(n) {
+            let (a, b) = chunk.as_slices();
+            out.extend_from_slice(a);
+            out.extend_from_slice(b);
+            chunk.commit_all();
+        }
     }
 
     /// Saca una respuesta del motor, si hay.
@@ -129,6 +142,7 @@ struct Built {
     commands: rtrb::Producer<Command>,
     replies: rtrb::Consumer<Reply>,
     looper_capacity: usize,
+    song: rtrb::Consumer<f32>,
     stats: Arc<AudioStats>,
 }
 
@@ -144,6 +158,7 @@ fn finish(
         commands: b.commands,
         replies: b.replies,
         looper_capacity: b.looper_capacity,
+        song: b.song,
         stats: b.stats,
         sample_rate: config.sample_rate,
         channels: config.channels,
@@ -173,6 +188,9 @@ where
     let channels = config.channels as usize;
     let mut engine = Engine::new(config.sample_rate as f32);
     let looper_capacity = engine.looper_capacity();
+    // Cola de 4 s para grabar la canción: la interfaz la vacía en cada fotograma.
+    let (song_tx, song_rx) = rtrb::RingBuffer::<f32>::new(config.sample_rate as usize * 2 * 4);
+    engine.set_song_tap(song_tx);
     // Buffer estéreo reservado antes de arrancar: el callback no reserva memoria.
     let mut scratch = vec![0.0f32; MAX_BLOCK * 2];
 
@@ -237,6 +255,7 @@ where
         commands: producer,
         replies: reply_rx,
         looper_capacity,
+        song: song_rx,
         stats,
     })
 }

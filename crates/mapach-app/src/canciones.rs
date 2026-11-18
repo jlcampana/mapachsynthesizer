@@ -89,8 +89,21 @@ pub enum Done {
     Failed(String),
 }
 
+/// Grabación de la canción entera (todo lo que suena).
+pub struct Live {
+    /// Audio estéreo intercalado.
+    buf: Vec<f32>,
+    /// Cuándo empezó (tiempo de la app).
+    pub started: f64,
+}
+
+/// Duración máxima de la grabación de la canción entera.
+pub const LIVE_MAX_SECONDS: f64 = 600.0;
+
 pub struct Songs {
     pub current: Current,
+    /// Grabando la canción entera.
+    pub live: Option<Live>,
     pub list: Vec<SongInfo>,
     /// Qué se está haciendo ("Guardando…", "Creando MP3…").
     pub busy: Option<String>,
@@ -115,6 +128,7 @@ impl Songs {
         let (tx, rx) = mpsc::channel();
         Self {
             current,
+            live: None,
             list: Vec::new(),
             busy: None,
             last_saved: None,
@@ -336,6 +350,70 @@ impl Songs {
         st.track = 0;
         self.current = Current::new_random();
         self.dirty_since = None;
+    }
+
+    /// Empieza o termina la grabación de la canción entera. Al terminar, la guarda como MP3
+    /// en Exportadas (en otro hilo; el resultado llega por [`Self::poll`]).
+    pub fn toggle_live(&mut self, now: f64, audio: &mut AudioOutput) -> bool {
+        if self.live.is_some() {
+            self.finish_live(audio);
+            false
+        } else {
+            // Lo que hubiera en la cola de antes no cuenta.
+            let mut old = Vec::new();
+            audio.drain_song(&mut old);
+            audio.send(Command::SongRecord(true));
+            self.live = Some(Live {
+                buf: Vec::with_capacity(self.sample_rate as usize * 2 * 60),
+                started: now,
+            });
+            true
+        }
+    }
+
+    /// Llamar en cada fotograma: recoge lo grabado y para sola al llegar al máximo.
+    pub fn live_tick(&mut self, now: f64, audio: &mut AudioOutput) -> bool {
+        let Some(live) = &mut self.live else {
+            return false;
+        };
+        audio.drain_song(&mut live.buf);
+        if now - live.started >= LIVE_MAX_SECONDS {
+            self.finish_live(audio);
+            return true;
+        }
+        false
+    }
+
+    fn finish_live(&mut self, audio: &mut AudioOutput) {
+        audio.send(Command::SongRecord(false));
+        let Some(mut live) = self.live.take() else {
+            return;
+        };
+        audio.drain_song(&mut live.buf);
+        if live.buf.len() < self.sample_rate as usize {
+            // Menos de medio segundo: no vale la pena.
+            return;
+        }
+        self.busy = Some("Guardando la grabación…".into());
+        let tx = self.tx.clone();
+        let rate = self.sample_rate;
+        let name = format!("{} (grabación)", self.current.nombre);
+        let exports = self.exports_dir.clone();
+        std::thread::spawn(move || {
+            let mut samples = live.buf;
+            // Volumen igualado: no depende de cómo estuviera la perilla.
+            let peak = samples.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+            if peak > 1e-4 {
+                let g = 0.89 / peak;
+                samples.iter_mut().for_each(|s| *s *= g);
+            }
+            let path = export::free_path(&exports, &name, Format::Mp3);
+            let msg = match export::write(&path, &samples, rate, Format::Mp3, &name) {
+                Ok(()) => Done::Exported(path),
+                Err(e) => Done::Failed(format!("{e:#}")),
+            };
+            let _ = tx.send(msg);
+        });
     }
 
     /// ¿La canción actual está guardada (tiene nombre y carpeta)?

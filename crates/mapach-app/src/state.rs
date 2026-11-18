@@ -152,6 +152,8 @@ pub enum Action {
     },
     /// Cerrar la lista (deja de sonar).
     ClosePicker,
+    /// Empezar o terminar de grabar la canción entera.
+    ToggleSongRecording,
 }
 
 /// Para qué se elige un sample de la lista.
@@ -1098,6 +1100,17 @@ impl State {
 
     fn press(&mut self, c: Control, now: f64, out: &mut Vec<Command>) {
         self.now = self.now.max(now);
+        // Espacio: fuera de la pantalla de tocar, o con un menú pulsado (🎲), hace de Grabar.
+        let c = match c {
+            Control::RecordSong if self.screen != Screen::Tocar || self.menu_held().is_some() => {
+                Control::Record
+            }
+            Control::RecordSong => {
+                self.actions.push(Action::ToggleSongRecording);
+                return;
+            }
+            other => other,
+        };
         if self.picker_press(c, out) {
             return;
         }
@@ -1379,6 +1392,11 @@ impl State {
     }
 
     fn release_control(&mut self, c: Control, out: &mut Vec<Command>) {
+        let c = if c == Control::RecordSong {
+            Control::Record
+        } else {
+            c
+        };
         if self.screen == Screen::Taller && c == Control::Play {
             if self.play_held.take().is_some() {
                 self.actions.push(Action::Destroy(self.destroy_sel));
@@ -2688,6 +2706,20 @@ mod tests {
                 Action::ClosePicker
             ]
         );
+    }
+
+    #[test]
+    fn espacio_graba_la_cancion_entera() {
+        let mut s = State::default();
+        let c = press(&mut s, Control::RecordSong);
+        assert!(c.is_empty());
+        assert_eq!(s.take_actions(), [Action::ToggleSongRecording]);
+        release(&mut s, Control::RecordSong);
+        // En el taller, Espacio sigue grabando con el micro.
+        press(&mut s, Control::Taller);
+        s.take_actions();
+        press(&mut s, Control::RecordSong);
+        assert_eq!(s.take_actions(), [Action::MicToggle]);
     }
 
     #[test]

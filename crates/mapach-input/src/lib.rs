@@ -76,6 +76,8 @@ pub enum Control {
     Step(u8),
     /// Atajo a sample 0–3 (la fila de las teclas 9–12 del mando).
     Shortcut(u8),
+    /// Grabar la canción entera, todo lo que suena (barra espaciadora).
+    RecordSong,
 }
 
 /// Un evento de entrada.

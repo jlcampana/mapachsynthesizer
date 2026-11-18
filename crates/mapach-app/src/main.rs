@@ -327,6 +327,10 @@ impl App {
             }
             return;
         };
+        if songs.live_tick(now, audio) {
+            self.state
+                .show_toast("La grabación ha llegado a 10 minutos y se ha guardado");
+        }
         Self::songs_actions(&mut self.state, songs, audio, actions, now);
     }
 
@@ -376,6 +380,14 @@ impl App {
                     } else if !songs.is_busy() {
                         songs.begin_save(state, audio, Some(f));
                     }
+                }
+                Action::ToggleSongRecording => {
+                    let started = songs.toggle_live(now, audio);
+                    state.show_toast(if started {
+                        "● Grabando la canción (Espacio para parar)"
+                    } else {
+                        "Guardando la grabación…"
+                    });
                 }
                 // Las del taller van por otro lado.
                 _ => {}
@@ -951,6 +963,11 @@ impl eframe::App for App {
             ),
             None => (0.0, "sin audio".into()),
         };
+        let live = self
+            .songs
+            .as_ref()
+            .and_then(|s| s.live.as_ref())
+            .map(|l| now - l.started);
         let songs_view = self.songs.as_ref().map(|s| ui::SongsView {
             current: &s.current.nombre,
             current_color: s.current.color,
@@ -981,6 +998,7 @@ impl eframe::App for App {
                 drum_step,
                 songs: songs_view,
                 taller: taller_view,
+                live,
             },
         );
         if self.menu {
@@ -1009,6 +1027,7 @@ impl eframe::App for App {
 
         // Animación del osciloscopio mientras suena algo.
         if peak > 1e-4
+            || live.is_some()
             || self.taller.is_recording()
             || drum_step.is_some()
             || self.state.looper_visible()

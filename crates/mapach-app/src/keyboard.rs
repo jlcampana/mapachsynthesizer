@@ -41,7 +41,9 @@ pub fn translate(key: Key, _mods: Modifiers, pressed: bool) -> Option<KeyAction>
         K::Z => ev(Control::Menu(Menu::Tono)),
         K::X => ev(Control::Menu(Menu::Sonido)),
         K::C => ev(Control::Menu(Menu::Modo)),
-        K::Space => ev(Control::Record),
+        // Espacio graba la canción entera; L, el looper (en el mando, Grabar).
+        K::Space => ev(Control::RecordSong),
+        K::L => ev(Control::Record),
         K::Enter => ev(Control::Play),
         K::Num1 => ev(Control::Track(0)),
         K::Num2 => ev(Control::Track(1)),

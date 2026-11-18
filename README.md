@@ -26,7 +26,8 @@ Con él se puede:
 - 20 sonidos (analógico, FM, órgano, ruido y voces) y efectos (sala, eco, coro, distorsión, robot…).
 - Modos Tocar, Rasgueo, Arpegio (6 patrones), Repetir, Zumbido y Melodía, con tempo y tap tempo (`B`).
 - **Batería** sintetizada (4 kits), **56 ritmos** y **secuenciador de 16 pasos**.
-- **Looper de 6 pistas**: `Espacio` graba, `1`–`6` eligen pista, mantener una pista 1,5 s la
+- **Grabar la canción entera** con la barra espaciadora: se guarda un MP3 en `Música/Mapachsynthesizer/Exportadas`.
+- **Looper de 6 pistas**: Grabar (`L`) graba, `1`–`6` eligen pista, mantener una pista 1,5 s la
   borra y `Retroceso` deshace.
 - **Mis canciones** (`F5`): se guardan con su nombre (y luego solas) y se exportan a **MP3, OGG o
   WAV** en `Música/Mapachsynthesizer/Exportadas`.
@@ -65,7 +66,8 @@ sudo apt install libasound2-dev          # Ubuntu / Debian
 | Rueda del ratón | Rueda grande del mando (cursor, como en un iPod) |
 | `-` / `+` | Tempo (perilla del centro) |
 | `B` | Tap tempo |
-| `Espacio` | Grabar en el looper (con un menú pulsado: 🎲 al azar) |
+| `Espacio` | Grabar la canción entera, todo lo que suena (con un menú pulsado: 🎲 al azar) |
+| `L` | Grabar en el looper |
 | `1`–`6` | Elegir pista del looper (mantener: borrarla) |
 | `Intro` | OK: elegir en menús; si no, play / pausa |
 | `V N M ,` | Atajos a samples (fila 3 del mando) |

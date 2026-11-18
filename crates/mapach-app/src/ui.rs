@@ -109,6 +109,8 @@ pub struct Extra<'a> {
     pub drum_step: Option<usize>,
     pub songs: Option<SongsView<'a>>,
     pub taller: Option<TallerView<'a>>,
+    /// Segundos que lleva grabándose la canción entera.
+    pub live: Option<f64>,
 }
 
 /// Lo que hace falta para dibujar el taller.
@@ -253,6 +255,33 @@ fn top_bar(c: &Canvas, st: &State, extra: &Extra) {
         15.0,
         TEXTO,
     );
+
+    // Grabando la canción entera: se tapa la pantallita con el aviso y el tiempo.
+    if let Some(secs) = extra.live {
+        let blink = (extra.time * 2.0).fract() < 0.6;
+        c.rect(x0, 8.0, x1 - x0, 46.0, 8.0, hex(0x3A1414));
+        c.rect_stroke(x0, 8.0, x1 - x0, 46.0, 8.0, 1.5, MENU_ROJO);
+        if blink {
+            c.circle(x0 + 24.0, 31.0, 7.0, MENU_ROJO);
+        }
+        let t = secs as u64;
+        c.text(
+            x0 + 42.0,
+            31.0,
+            Align2::LEFT_CENTER,
+            format!("Grabando la canción   {}:{:02}", t / 60, t % 60),
+            17.0,
+            TEXTO,
+        );
+        c.text(
+            x1 - 14.0,
+            31.0,
+            Align2::RIGHT_CENTER,
+            "Espacio para parar",
+            12.0,
+            TEXTO_2,
+        );
+    }
 
     // Transporte: grabar y play.
     let rec = st.looper.recording.is_some();

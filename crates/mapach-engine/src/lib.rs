@@ -115,6 +115,8 @@ pub enum Command {
     PlayShortcut(u8),
     /// Escucha un sample tal cual (en el taller). `None` para.
     Preview(Option<std::sync::Arc<[f32]>>),
+    /// Empieza o termina de copiar todo lo que suena a la cola de grabación de la canción.
+    SongRecord(bool),
     /// Copia una pista del looper en el búfer (de `looper_capacity() * 2` muestras).
     LoopCopy {
         track: u8,
@@ -224,6 +226,9 @@ pub struct Engine {
     bpm: f32,
     /// Respuestas pendientes (como mucho unas pocas: no reserva en el hilo de audio).
     replies: [Option<Reply>; 4],
+    /// Cola donde se copia lo que suena para grabar la canción entera (si se ha conectado).
+    song_tap: Option<rtrb::Producer<f32>>,
+    song_rec: bool,
     /// Contador para saber qué voz es la más vieja.
     clock: u64,
     peak: f32,
@@ -250,6 +255,8 @@ impl Engine {
             preview: None,
             bpm: 120.0,
             replies: [None, None, None, None],
+            song_tap: None,
+            song_rec: false,
             clock: 0,
             peak: 0.0,
         }
@@ -362,6 +369,7 @@ impl Engine {
                 }
                 self.preview = p.map(|d| (d, 0));
             }
+            Command::SongRecord(on) => self.song_rec = on,
             Command::SetEffect(e) => self.fx.set_effect(e),
             Command::SetEffectAmount(a) => self.fx.amount = a.clamp(0.0, 1.0),
             Command::SetReverb(r) => self.fx.reverb = r.clamp(0.0, 1.0),
@@ -440,6 +448,11 @@ impl Engine {
     /// Paso de la caja de ritmos que suena, si está en marcha.
     pub fn drum_step(&self) -> Option<usize> {
         self.drums.step()
+    }
+
+    /// Conecta la cola de grabación de la canción (se hace antes de arrancar el audio).
+    pub fn set_song_tap(&mut self, tap: rtrb::Producer<f32>) {
+        self.song_tap = Some(tap);
     }
 
     fn reply(&mut self, r: Reply) {
@@ -543,6 +556,17 @@ impl Engine {
             peak = peak.max(l.abs()).max(r.abs());
         }
         self.peak = peak;
+        // Grabar la canción: lo mismo que sale por los altavoces. Si la cola se llena (la
+        // interfaz no la vacía), lo que sobra se pierde: nunca se bloquea.
+        if self.song_rec
+            && let Some(tap) = &mut self.song_tap
+        {
+            for &s in out.iter() {
+                if tap.push(s).is_err() {
+                    break;
+                }
+            }
+        }
     }
 }
 
@@ -860,6 +884,24 @@ mod tests {
         assert!(e.peak() > 0.01);
         e.handle(Command::Preview(None));
         assert!(matches!(e.take_reply(), Some(Reply::FreeSample(_))));
+    }
+
+    #[test]
+    fn grabar_la_cancion_copia_lo_que_suena() {
+        let mut e = Engine::new(48_000.0);
+        let (tx, mut rx) = rtrb::RingBuffer::<f32>::new(48_000 * 2);
+        e.set_song_tap(tx);
+        e.handle(on(60));
+        render(&mut e, 0.1);
+        assert_eq!(rx.slots(), 0, "sin grabar no copia");
+        e.handle(Command::SongRecord(true));
+        let buf = render(&mut e, 0.1);
+        assert_eq!(rx.slots(), buf.len());
+        let copied: Vec<f32> = (0..buf.len()).map(|_| rx.pop().unwrap()).collect();
+        assert_eq!(copied, buf);
+        e.handle(Command::SongRecord(false));
+        render(&mut e, 0.1);
+        assert_eq!(rx.slots(), 0);
     }
 
     #[test]
