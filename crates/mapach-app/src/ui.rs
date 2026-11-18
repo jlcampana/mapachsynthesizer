@@ -434,7 +434,7 @@ fn looper_view(c: &Canvas, st: &State, extra: &Extra) {
         690.0,
         112.0,
         Align2::RIGHT_CENTER,
-        "OK + rueda: pista · ● grabar · OK: seguir o parar",
+        "OK + rueda: pista · pulsa volumen: 🔇 · ● grabar",
         13.0,
         NEON_CIAN.gamma_multiply(0.7),
     );
@@ -487,7 +487,24 @@ fn looper_view(c: &Canvas, st: &State, extra: &Extra) {
             for k in 0..40 {
                 let x = x0 + 6.0 + k as f32 * (w - 12.0) / 40.0;
                 let h = 4.0 + ((k * 7 + i * 3) % 9) as f32 * 1.2;
-                c.rect(x, y - h / 2.0, 2.0, h, 1.0, BLANCO.gamma_multiply(0.5));
+                c.rect(
+                    x,
+                    y - h / 2.0,
+                    2.0,
+                    h,
+                    1.0,
+                    BLANCO.gamma_multiply(if muted { 0.15 } else { 0.5 }),
+                );
+            }
+            if muted {
+                c.text(
+                    x0 + w / 2.0,
+                    y,
+                    Align2::CENTER_CENTER,
+                    "🔇 en silencio",
+                    13.0,
+                    TEXTO,
+                );
             }
         } else {
             c.rect_stroke(

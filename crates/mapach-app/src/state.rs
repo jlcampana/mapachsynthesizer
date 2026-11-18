@@ -289,6 +289,9 @@ pub struct OpenMenu {
 pub const SEQ_ROWS: usize = 8;
 pub const SEQ_EXIT: usize = 7;
 
+/// Segundos que se ve el looper tras tocarlo (elegir pista, grabar…).
+pub const LOOPER_SHOWN: f64 = 4.0;
+
 pub const BPM_MIN: f32 = 40.0;
 pub const BPM_MAX: f32 = 300.0;
 
@@ -730,7 +733,7 @@ impl State {
             {
                 self.track = next;
             }
-            self.looper_shown_until = now + 2.0;
+            self.looper_shown_until = now + LOOPER_SHOWN;
         }
         if let Some((t, since)) = self.track_hold
             && now - since >= Self::HOLD_TO_CLEAR
@@ -787,7 +790,7 @@ impl State {
             self.last_recorded = None;
         }
         self.track = t;
-        self.looper_shown_until = self.now + 2.0;
+        self.looper_shown_until = self.now + LOOPER_SHOWN;
     }
 
     /// ¿Se ve la pantalla del looper?
@@ -805,7 +808,7 @@ impl State {
             self.looper.recording = Some(self.track);
             self.looper.used |= 1 << self.track;
         }
-        self.looper_shown_until = self.now + 2.0;
+        self.looper_shown_until = self.now + LOOPER_SHOWN;
     }
 
     /// Traduce las teclas crudas del mando y, en el secuenciador, las teclas de pasos.
@@ -1056,7 +1059,7 @@ impl State {
             Control::Chord(b) if self.record_held.is_some() && (b as usize) < TRACKS => {
                 self.record_held = Some(true);
                 self.track = b as usize;
-                self.looper_shown_until = self.now + 2.0;
+                self.looper_shown_until = self.now + LOOPER_SHOWN;
             }
             Control::Chord(b) | Control::ChordHigh(b) if (b as usize) < BUTTONS => {
                 let high = matches!(c, Control::ChordHigh(_));
@@ -1150,12 +1153,28 @@ impl State {
             Control::Track(t) if (t as usize) < TRACKS => {
                 self.track = t as usize;
                 self.track_hold = Some((self.track, self.now));
-                self.looper_shown_until = self.now + 2.0;
+                self.looper_shown_until = self.now + LOOPER_SHOWN;
             }
             Control::Undo => {
                 if let Some(t) = self.last_recorded.take() {
                     self.clear_track(t, out);
                 }
+            }
+            // Pulsar el volumen: con el looper a la vista, silencia (o no) la pista elegida;
+            // si no, silencia todo.
+            Control::KnobPress(Knob::Volumen)
+                if self.looper_visible() && self.looper.has(self.track) =>
+            {
+                let t = self.track;
+                let muted = self.looper.muted & (1 << t) == 0;
+                out.push(Command::LoopMute(t as u8, muted));
+                self.looper.muted ^= 1 << t;
+                self.looper_shown_until = self.now + LOOPER_SHOWN;
+                self.show_toast(if muted {
+                    format!("🔇 Pista {} en silencio", t + 1)
+                } else {
+                    format!("🔊 Pista {} suena", t + 1)
+                });
             }
             Control::KnobPress(Knob::Volumen) => {
                 self.muted = !self.muted;
@@ -1365,7 +1384,7 @@ impl State {
                     // Play + rueda: elegir pista del looper.
                     *used = true;
                     self.track = wrap(self.track, d, TRACKS);
-                    self.looper_shown_until = self.now + 2.0;
+                    self.looper_shown_until = self.now + LOOPER_SHOWN;
                 } else if self.play_mode == PlayMode::Secuencia {
                     self.seq_row = wrap(self.seq_row, d, SEQ_ROWS);
                 } else if self.current.is_some() {
@@ -2144,6 +2163,32 @@ mod tests {
         // Deshacer borra la última grabación.
         let c = press(&mut s, Control::Undo);
         assert_eq!(c, [Command::LoopClear(0)]);
+    }
+
+    #[test]
+    fn pulsar_volumen_silencia_la_pista_elegida() {
+        let mut s = State::default();
+        let lp = LooperStatus {
+            used: 0b11,
+            playing: true,
+            length: 2.0,
+            ..Default::default()
+        };
+        s.sync(lp, 0.0);
+        // Elegir la pista 2 con OK + rueda (el looper queda a la vista).
+        press(&mut s, Control::Play);
+        s.handle(Event::Turn(Knob::Cursor, 1), 0.0);
+        release(&mut s, Control::Play);
+        assert_eq!(s.track, 1);
+        let c = press(&mut s, Control::KnobPress(Knob::Volumen));
+        assert_eq!(c, [Command::LoopMute(1, true)]);
+        assert!(!s.muted, "el volumen general no cambia");
+        let c = press(&mut s, Control::KnobPress(Knob::Volumen));
+        assert_eq!(c, [Command::LoopMute(1, false)]);
+        // Sin el looper a la vista, silencia todo.
+        s.sync(lp, 10.0);
+        let c = press(&mut s, Control::KnobPress(Knob::Volumen));
+        assert_eq!(c, [Command::SetParam(Param::Volume(0.0))]);
     }
 
     #[test]

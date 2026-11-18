@@ -485,6 +485,10 @@ mod tests {
         link.run(0.01);
         let lp = link.engine.looper_status();
         assert!(lp.has(0));
+        assert!(
+            !lp.playing,
+            "al abrir una canción, el looper no arranca solo"
+        );
         assert!((lp.length - 1.0).abs() < 0.01);
 
         // El audio de vuelta suena.
