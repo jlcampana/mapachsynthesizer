@@ -300,7 +300,8 @@ Está diseñado para niños que todavía no leen, y de él hay mucho que aprende
 4. **Seguridad del volumen**: volumen máximo para el adulto, un limitador que lo siga, agudos
    suavizados y los sonidos igualados por sonoridad, con un test que lo compruebe. El limitador
    fijo de la fase 5 ya cubre lo básico hasta entonces.
-5. **Efectos de un toque con nombre de niño**: hipo, al revés, dormido, chillón, gigante y congelar.
+5. ~~**Efectos de un toque con nombre de niño**: hipo, al revés, dormido, chillón, gigante y congelar.~~
+   Descartado (18-11-2026).
 6. **Juegos**: *Sigue la canción* y *Cópiame*, que son más sencillos que el *Chord Hiro*, y
    estrellas que desbloquean cosas.
 7. **Una tarjeta corta que el adulto pueda leer en voz alta** al cambiar de modo.
