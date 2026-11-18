@@ -50,6 +50,32 @@ impl Captura {
         songs.last_saved = Some(0.0);
     }
 
+    /// Biblioteca de samples de mentira en una carpeta temporal.
+    pub fn fake_taller(&self, t: &mut crate::taller::Taller) {
+        use mapach_samples::{Sample, library};
+        let dir = std::env::temp_dir().join("mapach-demo-samples");
+        if !dir.exists() {
+            let tone = |f: f32, secs: f32, decay: f32| {
+                Sample::new(
+                    (0..(48_000.0 * secs) as usize)
+                        .map(|i| {
+                            let t = i as f32 / 48_000.0;
+                            (t * f * std::f32::consts::TAU).sin() * (-t * decay).exp() * 0.8
+                        })
+                        .collect(),
+                )
+            };
+            for (name, s) in [
+                ("Ladrido", tone(300.0, 0.8, 6.0)),
+                ("Mi voz hola", tone(220.0, 1.4, 1.5)),
+                ("Cacerola", tone(900.0, 0.5, 10.0)),
+            ] {
+                let _ = library::save_in(&dir, name, &s);
+            }
+        }
+        t.set_dirs(dir.clone(), dir.join("Importar"));
+    }
+
     /// Eventos de cada escena de demostración.
     pub fn events(&self) -> Vec<Event> {
         use Control::*;
@@ -136,6 +162,7 @@ impl Captura {
             10 => vec![p(Record), r(Record), p(Chord(0))],
             11 => vec![p(Canciones), p(Arrow(A::Right))],
             12 => vec![p(Canciones), p(Arrow(A::Down)), p(Arrow(A::Right))],
+            13 => vec![p(Taller)],
             _ => vec![],
         }
     }

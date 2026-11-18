@@ -108,6 +108,18 @@ pub struct Extra<'a> {
     /// Paso de la caja de ritmos que suena.
     pub drum_step: Option<usize>,
     pub songs: Option<SongsView<'a>>,
+    pub taller: Option<TallerView<'a>>,
+}
+
+/// Lo que hace falta para dibujar el taller.
+pub struct TallerView<'a> {
+    pub list: &'a [mapach_samples::library::Entry],
+    pub overview: &'a [f32],
+    pub root: Option<f32>,
+    pub recording: bool,
+    pub rec_level: f32,
+    pub rec_seconds: f32,
+    pub seconds: f32,
 }
 
 /// Lo que hace falta para dibujar la pantalla de canciones.
@@ -137,6 +149,8 @@ pub fn draw(c: &Canvas, st: &State, extra: &Extra) {
 
     if st.screen == Screen::Canciones {
         songs_screen(c, st, extra);
+    } else if st.screen == Screen::Taller {
+        taller_screen(c, st, extra);
     } else {
         top_bar(c, st);
         menu_buttons(c, st);
@@ -1164,6 +1178,197 @@ fn songs_screen(c: &Canvas, st: &State, extra: &Extra) {
         NEON_CIAN.gamma_multiply(0.6),
     );
     let _ = sv.current_color;
+}
+
+/// Taller de samples (boceto 04-taller-samples.svg).
+fn taller_screen(c: &Canvas, st: &State, extra: &Extra) {
+    use mapach_samples::destroy::Destroy;
+    c.rect(36.0, 30.0, 320.0, 48.0, 24.0, hex(0xB45CFF));
+    c.text(
+        196.0,
+        54.0,
+        Align2::CENTER_CENTER,
+        "🧪 TALLER DE SAMPLES",
+        22.0,
+        BLANCO,
+    );
+    c.text(
+        924.0,
+        54.0,
+        Align2::RIGHT_CENTER,
+        "↑↓ elegir · Espacio grabar · Intro escuchar · Tab salir",
+        14.0,
+        MARRON,
+    );
+    let Some(tv) = &extra.taller else { return };
+
+    // Biblioteca (5 visibles).
+    let n = tv.list.len();
+    let start = st.sample_sel.saturating_sub(2).min(n.saturating_sub(5));
+    for slot in 0..5 {
+        let i = start + slot;
+        let y = 96.0 + slot as f32 * 66.0;
+        if i >= n {
+            if i == n {
+                // Tarjeta de grabar.
+                c.rect_stroke(36.0, y, 230.0, 58.0, 18.0, 3.0, MENU_ROJO);
+                c.circle(68.0, y + 29.0, 16.0, MENU_ROJO);
+                c.circle(68.0, y + 29.0, 7.0, BLANCO);
+                c.text(
+                    96.0,
+                    y + 29.0,
+                    Align2::LEFT_CENTER,
+                    "Espacio: grabar",
+                    17.0,
+                    MENU_ROJO,
+                );
+            }
+            continue;
+        }
+        let e = &tv.list[i];
+        let col = rgb(e.color);
+        let sel = i == st.sample_sel;
+        if sel {
+            c.rect(31.0, y - 5.0, 240.0, 68.0, 22.0, BLANCO);
+        }
+        c.rect(36.0, y, 230.0, 58.0, 18.0, col);
+        let tc = texto_sobre(col);
+        c.circle(64.0, y + 29.0, 16.0, BLANCO.gamma_multiply(0.35));
+        c.text(65.0, y + 29.0, Align2::CENTER_CENTER, "▶", 15.0, tc);
+        let name: String = e.name.chars().take(16).collect();
+        c.text(90.0, y + 22.0, Align2::LEFT_CENTER, name, 17.0, tc);
+        let sub = if sel {
+            format!("{:.1} s", tv.seconds)
+        } else {
+            String::new()
+        };
+        let star = if st.instrument.as_deref() == Some(&*e.path.to_string_lossy()) {
+            " · 🎹"
+        } else {
+            ""
+        };
+        c.text(
+            90.0,
+            y + 42.0,
+            Align2::LEFT_CENTER,
+            format!("{sub}{star}"),
+            12.0,
+            tc,
+        );
+    }
+    if n == 0 {
+        c.text(
+            150.0,
+            200.0,
+            Align2::CENTER_CENTER,
+            "Aún no hay sonidos.\nGraba tu voz\no deja ficheros en\nMúsica › Mapachsynthesizer\n› Importar",
+            14.0,
+            MARRON,
+        );
+    }
+
+    // Forma de onda.
+    c.rect(282.0, 92.0, 646.0, 250.0, 28.0, NARANJA);
+    c.rect(290.0, 100.0, 630.0, 234.0, 22.0, OLED);
+    let title = if tv.recording {
+        format!("🔴 Grabando… {:.1} s (Espacio para parar)", tv.rec_seconds)
+    } else {
+        match (tv.list.get(st.sample_sel), tv.root) {
+            (Some(e), Some(r)) if st.show_names => format!(
+                "{} · nota {}",
+                e.name,
+                NOTE_NAMES[(r.round() as i32).rem_euclid(12) as usize]
+            ),
+            (Some(e), Some(_)) => format!("{} · 🎵 tiene nota", e.name),
+            (Some(e), None) => format!("{} · 🥁 sin nota", e.name),
+            (None, _) => "Elige un sonido o graba uno".into(),
+        }
+    };
+    c.text(310.0, 124.0, Align2::LEFT_CENTER, title, 19.0, NEON_CIAN);
+    if tv.recording {
+        let lvl = (tv.rec_level * 3.0).clamp(0.0, 1.0);
+        c.rect(310.0, 210.0, 590.0, 30.0, 15.0, OLED_APAGADO);
+        c.rect(310.0, 210.0, 590.0 * lvl, 30.0, 15.0, MENU_ROJO);
+        let f = (tv.rec_seconds / mapach_samples::MAX_SECONDS).clamp(0.0, 1.0);
+        c.rect(310.0, 260.0, 590.0 * f, 8.0, 4.0, NEON_AMARILLO);
+    } else {
+        let cols = tv.overview.len().max(1);
+        let w = 590.0 / cols as f32;
+        for (i, &v) in tv.overview.iter().enumerate() {
+            let h = (v * 170.0).max(3.0);
+            let x = 310.0 + i as f32 * w;
+            c.rect(
+                x,
+                225.0 - h / 2.0,
+                (w - 1.5).max(1.0),
+                h,
+                1.5,
+                hex(0x2ED573),
+            );
+        }
+    }
+
+    // Botones de destrozar.
+    c.text(
+        290.0,
+        362.0,
+        Align2::LEFT_CENTER,
+        "¡DESTRÓZALO!  Z aplicar · C deshacer · X usar en acordes",
+        17.0,
+        MARRON,
+    );
+    let colors = [
+        hex(0xFF3B30),
+        hex(0xB45CFF),
+        hex(0x1EC8FF),
+        hex(0xFF8A00),
+        hex(0x3D7BFF),
+        hex(0x2ED573),
+        hex(0xFF5CE1),
+        hex(0xFFD400),
+        hex(0x8E8A99),
+        hex(0xC86B2E),
+    ];
+    for (i, d) in Destroy::ALL.iter().enumerate() {
+        let (row, col) = (i / 5, i % 5);
+        let x = 290.0 + col as f32 * 128.0;
+        let y = 384.0 + row as f32 * 70.0;
+        let sel = i == st.destroy_sel;
+        if sel {
+            c.rect(x - 5.0, y - 5.0, 126.0, 66.0, 18.0, BLANCO);
+        }
+        c.rect(x, y, 116.0, 56.0, 14.0, colors[i]);
+        let tc = texto_sobre(colors[i]);
+        c.text(
+            x + 58.0,
+            y + 20.0,
+            Align2::CENTER_CENTER,
+            d.icon(),
+            20.0,
+            tc,
+        );
+        c.text(
+            x + 58.0,
+            y + 42.0,
+            Align2::CENTER_CENTER,
+            d.name(),
+            14.0,
+            tc,
+        );
+    }
+    // Leyenda de los botones de colores.
+    for (i, (txt, col, tc)) in [
+        ("Z aplicar", MENU_GRIS, BLANCO),
+        ("X usar", MENU_AMARILLO, MARRON),
+        ("C deshacer", MENU_ROJO, BLANCO),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let y = 440.0 + i as f32 * 28.0;
+        c.rect(36.0, y - 12.0, 230.0, 24.0, 12.0, col);
+        c.text(151.0, y, Align2::CENTER_CENTER, txt, 15.0, tc);
+    }
 }
 
 /// Pantalla del modo papá.

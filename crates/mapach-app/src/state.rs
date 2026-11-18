@@ -89,6 +89,7 @@ pub enum Screen {
     #[default]
     Tocar,
     Canciones,
+    Taller,
 }
 
 /// Cosas que la app tiene que hacer fuera de la lógica (leer y escribir ficheros).
@@ -101,6 +102,20 @@ pub enum Action {
     /// Canción nueva (vacía).
     New,
     Export(Format),
+    /// Abrir el taller (importar lo nuevo y leer la biblioteca).
+    OpenTaller,
+    /// Elegir el sample `n` de la biblioteca (cargarlo y escucharlo).
+    SelectSample(usize),
+    /// Empezar o terminar de grabar con el micro.
+    MicToggle,
+    /// Escuchar el sample elegido.
+    PreviewSample,
+    /// Destrozar el sample elegido con el botón `n`.
+    Destroy(usize),
+    /// Deshacer el último destrozo.
+    UndoSample,
+    /// Usar el sample elegido como instrumento ("Mi sample").
+    UseSample,
 }
 
 /// Fila elegida en la pantalla de canciones.
@@ -259,6 +274,13 @@ pub struct State {
     pub song_focus: SongFocus,
     /// Canciones en la lista (lo dice la app al leer la carpeta).
     pub song_count: usize,
+    /// Ruta del sample que se usa como instrumento ("Mi sample").
+    pub instrument: Option<String>,
+    /// Samples en la biblioteca del taller.
+    pub sample_count: usize,
+    pub sample_sel: usize,
+    /// Botón de destrozar elegido.
+    pub destroy_sel: usize,
     actions: Vec<Action>,
     /// Mensaje corto en pantalla y hasta cuándo.
     pub toast: Option<(String, f64)>,
@@ -327,6 +349,10 @@ impl Default for State {
             screen: Screen::Tocar,
             song_focus: SongFocus::Card(0),
             song_count: 0,
+            instrument: None,
+            sample_count: 0,
+            sample_sel: 0,
+            destroy_sel: 0,
             actions: Vec::new(),
             toast: None,
             track: 0,
@@ -440,6 +466,60 @@ impl State {
         self.open_menu = None;
         self.song_focus = SongFocus::Card(0);
         self.actions.push(Action::OpenSongs);
+    }
+
+    /// Usa un sample como instrumento: elige el sonido "Mi sample".
+    pub fn use_instrument(&mut self, path: String) -> Vec<Command> {
+        self.instrument = Some(path);
+        let mut out = Vec::new();
+        if let Some(i) = SOUNDS
+            .iter()
+            .position(|s| matches!(s.patch.kind, mapach_engine::Kind::Sampler { .. }))
+        {
+            self.sound = i;
+            self.apply_sound(&mut out);
+        }
+        out
+    }
+
+    fn open_taller(&mut self) {
+        self.screen = Screen::Taller;
+        self.open_menu = None;
+        self.sample_sel = 0;
+        self.actions.push(Action::OpenTaller);
+    }
+
+    /// Controles en el taller. Devuelve `true` si el control se ha usado.
+    fn taller_press(&mut self, c: Control) -> bool {
+        let n = self.sample_count;
+        let buttons = mapach_samples::destroy::Destroy::ALL.len();
+        match c {
+            Control::Arrow(Arrow::Up) | Control::Arrow(Arrow::Down) => {
+                if n > 0 {
+                    let d = if c == Control::Arrow(Arrow::Up) {
+                        -1
+                    } else {
+                        1
+                    };
+                    self.sample_sel = wrap(self.sample_sel, d, n);
+                    self.actions.push(Action::SelectSample(self.sample_sel));
+                }
+            }
+            Control::Arrow(Arrow::Left) => self.destroy_sel = wrap(self.destroy_sel, -1, buttons),
+            Control::Arrow(Arrow::Right) => self.destroy_sel = wrap(self.destroy_sel, 1, buttons),
+            Control::Record => self.actions.push(Action::MicToggle),
+            Control::Play => self.actions.push(Action::PreviewSample),
+            // Los botones de colores: gris destroza, amarillo lo usa en los acordes, rojo deshace.
+            Control::Menu(Menu::Tono) => self.actions.push(Action::Destroy(self.destroy_sel)),
+            Control::Menu(Menu::Sonido) => self.actions.push(Action::UseSample),
+            Control::Menu(Menu::Modo) | Control::Undo => self.actions.push(Action::UndoSample),
+            Control::Taller | Control::KnobPress(Knob::Magica) | Control::Canciones => {
+                self.screen = Screen::Tocar;
+                self.actions.push(Action::PreviewSample);
+            }
+            _ => return false,
+        }
+        true
     }
 
     /// Controles en la pantalla de canciones. Devuelve `true` si el control se ha usado.
@@ -685,8 +765,12 @@ impl State {
         if self.screen == Screen::Canciones && self.songs_press(c) {
             return;
         }
+        if self.screen == Screen::Taller && self.taller_press(c) {
+            return;
+        }
         match c {
             Control::Canciones => self.open_songs(),
+            Control::Taller => self.open_taller(),
             // Grabar + tecla de acorde 1–6 (en el mando): elegir pista.
             Control::Chord(b) if self.record_held.is_some() && (b as usize) < TRACKS => {
                 self.record_held = Some(true);
@@ -824,6 +908,10 @@ impl State {
     }
 
     fn release_control(&mut self, c: Control, out: &mut Vec<Command>) {
+        // En el taller, los menús son botones: no abren nada al soltarlos.
+        if self.screen == Screen::Taller && matches!(c, Control::Menu(_)) {
+            return;
+        }
         match c {
             Control::Chord(b) | Control::ChordHigh(b) => {
                 let high = matches!(c, Control::ChordHigh(_));
@@ -880,6 +968,11 @@ impl State {
     }
 
     fn turn(&mut self, k: Knob, d: i32, out: &mut Vec<Command>) {
+        if self.screen == Screen::Taller && k == Knob::Magica {
+            let buttons = mapach_samples::destroy::Destroy::ALL.len();
+            self.destroy_sel = wrap(self.destroy_sel, d, buttons);
+            return;
+        }
         let held = self.menu_held();
         if held.is_some() {
             self.menu_used = true;
@@ -1635,6 +1728,32 @@ mod tests {
         assert_eq!(s.take_actions(), [Action::Export(Format::Ogg)]);
         // Sigue en la pantalla; F5 sale.
         press(&mut s, Control::Canciones);
+        assert_eq!(s.screen, Screen::Tocar);
+    }
+
+    #[test]
+    fn taller_de_samples() {
+        let mut s = State::default();
+        press(&mut s, Control::Taller);
+        assert_eq!(s.screen, Screen::Taller);
+        assert_eq!(s.take_actions(), [Action::OpenTaller]);
+        s.sample_count = 3;
+        press(&mut s, Control::Arrow(Arrow::Up));
+        assert_eq!(s.take_actions(), [Action::SelectSample(2)]);
+        press(&mut s, Control::Arrow(Arrow::Right));
+        press(&mut s, Control::Menu(Menu::Tono));
+        release(&mut s, Control::Menu(Menu::Tono));
+        assert_eq!(s.take_actions(), [Action::Destroy(1)]);
+        // Soltar el menú no abre su página.
+        assert!(s.open_menu.is_none());
+        press(&mut s, Control::Menu(Menu::Sonido));
+        press(&mut s, Control::Record);
+        press(&mut s, Control::Undo);
+        assert_eq!(
+            s.take_actions(),
+            [Action::UseSample, Action::MicToggle, Action::UndoSample]
+        );
+        press(&mut s, Control::Taller);
         assert_eq!(s.screen, Screen::Tocar);
     }
 

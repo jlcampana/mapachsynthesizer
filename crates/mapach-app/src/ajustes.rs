@@ -42,6 +42,8 @@ pub struct Ajustes {
     pub efecto: usize,
     pub cantidad: f32,
     pub sala: f32,
+    /// Sample que se usa como instrumento ("" = ninguno).
+    pub mi_sample: String,
 }
 
 impl Default for Ajustes {
@@ -82,6 +84,7 @@ impl Ajustes {
             efecto: pos(&Effect::ALL, &s.effect),
             cantidad: s.effect_amount,
             sala: s.reverb,
+            mi_sample: s.instrument.clone().unwrap_or_default(),
         }
     }
 

@@ -5,6 +5,7 @@ mod canciones;
 mod captura;
 mod keyboard;
 mod state;
+mod taller;
 mod theme;
 mod ui;
 
@@ -83,6 +84,20 @@ struct App {
     last_save_check: f64,
     /// Canciones (solo si hay audio: sin motor no hay pistas que guardar).
     songs: Option<canciones::Songs>,
+    taller: taller::Taller,
+}
+
+/// Para el taller sin tarjeta de sonido: las órdenes se pierden.
+struct NoAudio;
+
+impl canciones::Link for NoAudio {
+    fn send(&mut self, _: Command) {}
+    fn reply(&mut self) -> Option<mapach_engine::Reply> {
+        None
+    }
+    fn capacity(&self) -> usize {
+        0
+    }
 }
 
 impl App {
@@ -96,6 +111,7 @@ impl App {
         mando::spawn(tx, stx, move || ctx.request_repaint());
         let mut state = State::default();
         let mut last_song = None;
+        let mut instrument = None;
         // En modo captura no se leen ni se guardan los ajustes del niño.
         if captura.is_none()
             && let Some(a) = ajustes::Ajustes::load()
@@ -103,6 +119,9 @@ impl App {
             a.apply(&mut state);
             if !a.cancion.is_empty() {
                 last_song = Some(std::path::PathBuf::from(&a.cancion));
+            }
+            if !a.mi_sample.is_empty() {
+                instrument = Some(std::path::PathBuf::from(&a.mi_sample));
             }
         }
         let saved = ajustes::Ajustes::from_state(&state);
@@ -134,7 +153,22 @@ impl App {
             saved,
             last_save_check: 0.0,
             songs,
+            taller: taller::Taller::new(),
         };
+        if let Some(cap) = &app.captura {
+            cap.fake_taller(&mut app.taller);
+        }
+        // El sample que se usaba como instrumento.
+        if let Some(path) = instrument
+            && let Some((data, root)) = taller::load_instrument(&path)
+        {
+            app.state.instrument = Some(path.to_string_lossy().into_owned());
+            app.send_all(vec![Command::SetSample {
+                slot: 0,
+                data,
+                root,
+            }]);
+        }
         let cmds = app.state.initial_commands();
         app.send_all(cmds);
         app
@@ -180,7 +214,27 @@ impl App {
 
     /// Canciones: respuestas del motor, resultados de los hilos, acciones y autoguardado.
     fn songs_tick(&mut self, now: f64) {
-        let actions = self.state.take_actions();
+        let (taller_actions, actions): (Vec<Action>, Vec<Action>) =
+            self.state.take_actions().into_iter().partition(|a| {
+                matches!(
+                    a,
+                    Action::OpenTaller
+                        | Action::SelectSample(_)
+                        | Action::MicToggle
+                        | Action::PreviewSample
+                        | Action::Destroy(_)
+                        | Action::UndoSample
+                        | Action::UseSample
+                )
+            });
+        for a in taller_actions {
+            self.taller_action(a, now);
+        }
+        if let Some(i) = self.taller.tick(now) {
+            self.state.sample_count = self.taller.list.len();
+            self.state.sample_sel = i;
+            self.state.show_toast("🎤 ¡Grabado!");
+        }
         let (Some(songs), Some(audio)) = (&mut self.songs, &mut self.audio) else {
             for a in actions {
                 match a {
@@ -196,25 +250,35 @@ impl App {
             }
             return;
         };
+        Self::songs_actions(&mut self.state, songs, audio, actions, now);
+    }
+
+    fn songs_actions(
+        state: &mut State,
+        songs: &mut canciones::Songs,
+        audio: &mut AudioOutput,
+        actions: Vec<Action>,
+        now: f64,
+    ) {
         songs.pump_replies(audio);
         while let Some(done) = songs.poll() {
             match done {
                 canciones::Done::Loaded(song, dir) => {
                     let name = song.nombre.clone();
-                    songs.apply_loaded(*song, dir, &mut self.state, audio);
-                    self.state.show_toast(format!("🎵 {name}"));
+                    songs.apply_loaded(*song, dir, state, audio);
+                    state.show_toast(format!("🎵 {name}"));
                 }
                 canciones::Done::Saved(_) => songs.last_saved = Some(now),
                 canciones::Done::Exported(p) => {
                     let file = p.file_name().map(|f| f.to_string_lossy().into_owned());
-                    self.state.show_toast(format!(
+                    state.show_toast(format!(
                         "✔ {} en Música › Exportadas",
                         file.unwrap_or_default()
                     ));
                 }
                 canciones::Done::Failed(e) => {
                     eprintln!("Canciones: {e}");
-                    self.state.show_toast("Algo ha fallado al guardar 😕");
+                    state.show_toast("Algo ha fallado al guardar 😕");
                 }
             }
         }
@@ -222,25 +286,104 @@ impl App {
             match a {
                 Action::OpenSongs => {
                     songs.refresh_list();
-                    self.state.song_count = songs.list.len();
+                    state.song_count = songs.list.len();
                 }
                 Action::Load(i) => songs.begin_load(i),
                 Action::New => {
-                    songs.new_song(&mut self.state, audio);
-                    self.state
-                        .show_toast(format!("✨ {}", songs.current.nombre));
+                    songs.new_song(state, audio);
+                    state.show_toast(format!("✨ {}", songs.current.nombre));
                 }
                 Action::Export(f) => {
-                    if self.state.looper.is_empty() {
-                        self.state
-                            .show_toast("Primero graba algo en el looper (Espacio)");
+                    if state.looper.is_empty() {
+                        state.show_toast("Primero graba algo en el looper (Espacio)");
                     } else if !songs.is_busy() {
-                        songs.begin_save(&self.state, audio, Some(f));
+                        songs.begin_save(state, audio, Some(f));
+                    }
+                }
+                // Las del taller van por otro lado.
+                _ => {}
+            }
+        }
+        songs.autosave(now, state.looper, state, audio);
+    }
+
+    /// Acciones del taller de samples.
+    fn taller_action(&mut self, a: Action, now: f64) {
+        let mut no_audio = NoAudio;
+        let link: &mut dyn canciones::Link = match &mut self.audio {
+            Some(a) => a,
+            None => &mut no_audio,
+        };
+        let t = &mut self.taller;
+        match a {
+            Action::OpenTaller => {
+                if let Some(msg) = t.open() {
+                    self.state.show_toast(msg);
+                }
+                self.state.sample_count = t.list.len();
+                self.state.sample_sel = 0;
+                t.select(0);
+            }
+            Action::SelectSample(i) => {
+                t.select(i);
+                t.preview(link);
+            }
+            Action::PreviewSample => {
+                if self.state.screen == state::Screen::Taller {
+                    t.preview(link);
+                } else {
+                    // Al salir del taller, deja de sonar.
+                    t.stop_preview(link);
+                    if t.is_recording() {
+                        t.mic_toggle(now).ok();
                     }
                 }
             }
+            Action::Destroy(b) => match t.destroy(b, link) {
+                Some(name) => self.state.show_toast(format!("💥 {name}")),
+                None => self.state.show_toast("Primero elige o graba un sonido"),
+            },
+            Action::UndoSample => {
+                if t.undo(link) {
+                    self.state.show_toast("↶ Deshecho");
+                }
+            }
+            Action::MicToggle => match t.mic_toggle(now) {
+                Ok(Some(i)) => {
+                    self.state.sample_count = t.list.len();
+                    self.state.sample_sel = i;
+                    self.state.show_toast("🎤 ¡Grabado!");
+                }
+                Ok(None) if t.is_recording() => {
+                    self.state.show_toast("🔴 Grabando… (Espacio para parar)")
+                }
+                Ok(None) => self.state.show_toast("No se ha oído nada 🤫"),
+                Err(e) => {
+                    eprintln!("Micro: {e}");
+                    self.state.show_toast("No encuentro el micrófono 🎤");
+                }
+            },
+            Action::UseSample => {
+                if let Some((data, root, name, path)) = t.for_instrument() {
+                    link.send(Command::SetSample {
+                        slot: 0,
+                        data,
+                        root,
+                    });
+                    let cmds = self
+                        .state
+                        .use_instrument(path.to_string_lossy().into_owned());
+                    for c in cmds {
+                        link.send(c);
+                    }
+                    self.state
+                        .show_toast(format!("🎤 Tus acordes suenan a «{name}»"));
+                } else {
+                    self.state.show_toast("Primero elige o graba un sonido");
+                }
+            }
+            _ => {}
         }
-        songs.autosave(now, self.state.looper, &self.state, audio);
     }
 
     fn papa_lines(&self) -> Vec<String> {
@@ -417,6 +560,16 @@ impl eframe::App for App {
             saved_ago: s.last_saved.map(|t| now - t),
             last_export: s.last_export.as_deref(),
         });
+        let t = &self.taller;
+        let taller_view = Some(ui::TallerView {
+            list: &t.list,
+            overview: &t.overview,
+            root: t.root,
+            recording: t.is_recording(),
+            rec_level: t.rec_level,
+            rec_seconds: t.rec_seconds,
+            seconds: t.current.as_ref().map_or(0.0, |c| c.1.seconds()),
+        });
         ui::draw(
             &canvas,
             &self.state,
@@ -426,6 +579,7 @@ impl eframe::App for App {
                 status: &status,
                 drum_step,
                 songs: songs_view,
+                taller: taller_view,
             },
         );
         if self.papa {
@@ -436,6 +590,7 @@ impl eframe::App for App {
 
         // Animación del osciloscopio mientras suena algo.
         if peak > 1e-4
+            || self.taller.is_recording()
             || drum_step.is_some()
             || self.state.looper_visible()
             || self.state.looper.playing

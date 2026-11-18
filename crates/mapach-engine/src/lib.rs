@@ -7,6 +7,7 @@
 pub mod audio;
 pub mod drums;
 pub mod looper;
+pub mod mic;
 mod patch;
 pub mod performer;
 mod voice;
