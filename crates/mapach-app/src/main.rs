@@ -674,7 +674,7 @@ impl eframe::App for App {
             let d = self.wheel.signum();
             self.wheel -= d;
             if !self.papa {
-                self.event(Event::Turn(Knob::Magica, d as i32), now);
+                self.event(Event::Turn(Knob::Cursor, d as i32), now);
             }
         }
 

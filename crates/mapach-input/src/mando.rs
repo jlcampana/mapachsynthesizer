@@ -46,11 +46,12 @@ impl Target {
         v
     }
 
+    /// Perilla física (0 izquierda, 1 centro, 2 derecha) → su papel.
     fn knob(k: u8) -> Knob {
         match k {
             0 => Knob::Volumen,
-            1 => Knob::Magica,
-            _ => Knob::Tempo,
+            1 => Knob::Tempo,
+            _ => Knob::Cursor,
         }
     }
 
@@ -343,15 +344,20 @@ mod tests {
             translate(KeyCode::KEY_KP6, 1),
             Some(Event::Turn(Knob::Volumen, 1))
         );
+        // La del centro es el tempo y la de la derecha, la rueda-cursor.
         assert_eq!(
             translate(KeyCode::KEY_KP8, 1),
-            Some(Event::Turn(Knob::Magica, -1))
+            Some(Event::Turn(Knob::Tempo, -1))
+        );
+        assert_eq!(
+            translate(KeyCode::KEY_KPASTERISK, 1),
+            Some(Event::Turn(Knob::Cursor, 1))
         );
         // Soltar después de un clic de giro no hace nada.
         assert_eq!(translate(KeyCode::KEY_KP6, 0), None);
         assert_eq!(
             translate(KeyCode::KEY_KPMINUS, 1),
-            Some(Event::Press(Control::KnobPress(Knob::Tempo)))
+            Some(Event::Press(Control::KnobPress(Knob::Cursor)))
         );
     }
 

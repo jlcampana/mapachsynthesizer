@@ -97,7 +97,7 @@ impl Captura {
                 p(Menu(M::Tono)),
                 r(Menu(M::Tono)),
                 p(Chord(0)),
-                Event::Turn(Knob::Magica, 4),
+                Event::Turn(Knob::Cursor, 4),
             ],
             5 => vec![
                 p(Menu(M::Modo)),

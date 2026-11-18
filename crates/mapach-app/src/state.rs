@@ -365,6 +365,10 @@ pub struct State {
     last_recorded: Option<usize>,
     now: f64,
     pub open_menu: Option<OpenMenu>,
+    /// En la página de un menú, la rueda cambia el valor (si no, mueve el cursor).
+    pub menu_edit: bool,
+    /// Play pulsado; `true` si mientras tanto se ha girado la rueda (entonces no hace play).
+    play_held: Option<bool>,
     pub current: Option<Sounding>,
     /// Notas que suenan en modo Melodía (tecla → nota).
     pub melody: Vec<(Control, i32)>,
@@ -440,6 +444,8 @@ impl Default for State {
             last_recorded: None,
             now: 0.0,
             open_menu: None,
+            menu_edit: false,
+            play_held: None,
             current: None,
             melody: Vec::new(),
             knob_color: 0,
@@ -590,11 +596,14 @@ impl State {
             Control::Arrow(Arrow::Left) => self.destroy_sel = wrap(self.destroy_sel, -1, buttons),
             Control::Arrow(Arrow::Right) => self.destroy_sel = wrap(self.destroy_sel, 1, buttons),
             Control::Record => self.actions.push(Action::MicToggle),
-            Control::Play => self.actions.push(Action::PreviewSample),
-            // Los botones de colores: gris destroza, amarillo lo usa en los acordes (al soltarlo;
-            // si mientras tanto se pulsa una tecla de acorde, va a ese golpe de batería), rojo
-            // deshace.
-            Control::Menu(Menu::Tono) => self.actions.push(Action::Destroy(self.destroy_sel)),
+            // Play hace de botón central: aplica el destrozo elegido con la rueda (y se escucha).
+            // La rueda elige el botón de destrozar y al pulsarla lo aplica.
+            Control::Play | Control::KnobPress(Knob::Cursor) => {
+                self.actions.push(Action::Destroy(self.destroy_sel))
+            }
+            // Los botones de colores: amarillo lo usa en los acordes (al soltarlo; si mientras
+            // tanto se pulsa una tecla de acorde, va a ese golpe de batería), rojo deshace y gris
+            // sale del taller.
             Control::Menu(Menu::Sonido) => {
                 self.menus_held[menu_idx(Menu::Sonido)] = true;
                 self.menu_used = false;
@@ -606,13 +615,34 @@ impl State {
                 self.actions.push(Action::DrumSample(b));
             }
             Control::Menu(Menu::Modo) | Control::Undo => self.actions.push(Action::UndoSample),
-            Control::Taller | Control::KnobPress(Knob::Magica) | Control::Canciones => {
+            Control::Taller | Control::Menu(Menu::Tono) | Control::Canciones => {
+                if c == Control::Menu(Menu::Tono) {
+                    // Que al soltarlo no se abra la página del menú gris.
+                    self.menus_held[menu_idx(Menu::Tono)] = true;
+                    self.menu_used = true;
+                }
                 self.screen = Screen::Tocar;
                 self.actions.push(Action::PreviewSample);
             }
             _ => return false,
         }
         true
+    }
+
+    /// La rueda en la pantalla de canciones: recorre las tarjetas y luego los botones de exportar.
+    fn songs_turn(&mut self, d: i32) {
+        let cards = self.song_count + 1;
+        let total = cards + Format::ALL.len();
+        let i = match self.song_focus {
+            SongFocus::Card(i) => i,
+            SongFocus::Export(i) => cards + i,
+        };
+        let j = wrap(i, d, total);
+        self.song_focus = if j < cards {
+            SongFocus::Card(j)
+        } else {
+            SongFocus::Export(j - cards)
+        };
     }
 
     /// Controles en la pantalla de canciones. Devuelve `true` si el control se ha usado.
@@ -638,7 +668,10 @@ impl State {
                 self.song_focus = SongFocus::Card(0);
             }
             (Control::Arrow(_), _) => {}
-            (Control::Record | Control::KnobPress(Knob::Tempo), SongFocus::Card(i)) => {
+            (
+                Control::Record | Control::Play | Control::KnobPress(Knob::Cursor),
+                SongFocus::Card(i),
+            ) => {
                 self.actions.push(if i >= self.song_count {
                     Action::New
                 } else {
@@ -646,13 +679,14 @@ impl State {
                 });
                 self.screen = Screen::Tocar;
             }
-            (Control::Record | Control::KnobPress(Knob::Tempo), SongFocus::Export(i)) => {
+            (
+                Control::Record | Control::Play | Control::KnobPress(Knob::Cursor),
+                SongFocus::Export(i),
+            ) => {
                 self.actions
                     .push(Action::Export(Format::ALL[i % Format::ALL.len()]));
             }
-            (Control::Canciones | Control::KnobPress(Knob::Magica) | Control::Menu(_), _) => {
-                self.screen = Screen::Tocar
-            }
+            (Control::Canciones | Control::Menu(_), _) => self.screen = Screen::Tocar,
             _ => return false,
         }
         true
@@ -822,6 +856,7 @@ impl State {
 
     /// Suelta todo lo pulsado (al perder el foco o abrir el modo papá).
     pub fn release_all(&mut self) {
+        self.play_held = None;
         self.preset_hold = None;
         self.track_hold = None;
         self.record_held = None;
@@ -940,7 +975,7 @@ impl State {
                     }
                     return;
                 }
-                Control::KnobPress(Knob::Magica)
+                Control::KnobPress(Knob::Cursor)
                 | Control::Menu(_)
                 | Control::Canciones
                 | Control::Taller => {
@@ -1064,12 +1099,13 @@ impl State {
                 self.muted = !self.muted;
                 out.push(Command::SetParam(Param::Volume(self.effective_volume())));
             }
-            Control::KnobPress(Knob::Magica) => {
+            Control::KnobPress(Knob::Cursor) => {
                 if let Some(m) = self.menu_held() {
                     self.menu_used = true;
                     self.randomize(m, out);
                 } else if self.open_menu.is_some() {
-                    self.open_menu = None;
+                    // Entrar o salir de cambiar el valor de la opción.
+                    self.menu_edit = !self.menu_edit;
                 } else if self.play_mode == PlayMode::Secuencia {
                     // Salir del secuenciador: el ritmo sigue como "Mi ritmo".
                     self.drum_style = STYLES.len();
@@ -1093,23 +1129,29 @@ impl State {
                 self.tap(now);
                 out.push(Command::SetBpm(self.bpm));
             }
-            // De momento, Play para el zumbido (el looper llegará en la fase 7).
-            Control::Play if self.play_mode == PlayMode::Zumbido && self.held.is_empty() => {
-                self.current = None;
-                out.push(Command::StopChord);
-            }
-            Control::Play if !self.looper.is_empty() => {
-                let on = !self.looper.playing;
-                out.push(Command::LoopPlay(on));
-                self.looper.playing = on;
-                if self.play_mode.is_drums() {
-                    self.set_drums_playing(on, out);
-                }
-            }
-            Control::Play if self.play_mode.is_drums() => {
-                self.set_drums_playing(!self.drums_playing, out);
-            }
+            // Play actúa al soltarlo, por si mientras tanto se gira la rueda (elegir pista).
+            // Con un menú abierto, Play es el botón central del iPod: entra y sale de cambiar
+            // el valor (las ruedas del mando no siempre se pueden pulsar).
+            Control::Play if self.open_menu.is_some() => self.menu_edit = !self.menu_edit,
+            Control::Play => self.play_held = Some(false),
             _ => {}
+        }
+    }
+
+    /// Play / pausa: para el zumbido, o sigue y para el looper y el ritmo.
+    fn play_action(&mut self, out: &mut Vec<Command>) {
+        if self.play_mode == PlayMode::Zumbido && self.held.is_empty() && self.current.is_some() {
+            self.current = None;
+            out.push(Command::StopChord);
+        } else if !self.looper.is_empty() {
+            let on = !self.looper.playing;
+            out.push(Command::LoopPlay(on));
+            self.looper.playing = on;
+            if self.play_mode.is_drums() {
+                self.set_drums_playing(on, out);
+            }
+        } else if self.play_mode.is_drums() {
+            self.set_drums_playing(!self.drums_playing, out);
         }
     }
 
@@ -1160,6 +1202,11 @@ impl State {
                     self.record(out);
                 }
             }
+            Control::Play => {
+                if self.play_held.take() == Some(false) {
+                    self.play_action(out);
+                }
+            }
             Control::Track(t) => {
                 if self.track_hold.is_some_and(|(h, _)| h == t as usize) {
                     self.track_hold = None;
@@ -1180,6 +1227,7 @@ impl State {
                         Some(o) if o.menu == m => None,
                         _ => Some(OpenMenu { menu: m, item: 0 }),
                     };
+                    self.menu_edit = false;
                 }
                 self.menu_used = false;
             }
@@ -1188,9 +1236,13 @@ impl State {
     }
 
     fn turn(&mut self, k: Knob, d: i32, out: &mut Vec<Command>) {
-        if self.screen == Screen::Taller && k == Knob::Magica {
+        if self.screen == Screen::Taller && k == Knob::Cursor {
             let buttons = mapach_samples::destroy::Destroy::ALL.len();
             self.destroy_sel = wrap(self.destroy_sel, d, buttons);
+            return;
+        }
+        if self.screen == Screen::Canciones && k == Knob::Cursor {
+            self.songs_turn(d);
             return;
         }
         let held = self.menu_held();
@@ -1213,17 +1265,33 @@ impl State {
                 self.muted = false;
                 out.push(Command::SetParam(Param::Volume(self.volume)));
             }
-            (Knob::Magica, Some(Menu::Tono)) => self.change(Item::Tonalidad, d, out),
-            (Knob::Magica, Some(Menu::Sonido)) => self.change(Item::Sonido, d, out),
-            (Knob::Magica, Some(Menu::Modo)) => self.change(Item::Modo, d, out),
-            (Knob::Magica, None) => {
-                if let Some(item) = self.selected_item() {
-                    self.change(item, d, out);
+            (Knob::Cursor, Some(Menu::Tono)) => self.change(Item::Tonalidad, d, out),
+            (Knob::Cursor, Some(Menu::Sonido)) => self.change(Item::Sonido, d, out),
+            (Knob::Cursor, Some(Menu::Modo)) => self.change(Item::Modo, d, out),
+            (Knob::Cursor, None) => {
+                if let Some(open) = self.open_menu {
+                    // Como un iPod: girar mueve el cursor; pulsar entra a cambiar el valor.
+                    if self.menu_edit {
+                        if let Some(item) = self.selected_item() {
+                            self.change(item, d, out);
+                        }
+                    } else {
+                        let len = self.items(open.menu).len();
+                        let item = wrap(open.item.min(len - 1), d, len);
+                        self.open_menu = Some(OpenMenu { item, ..open });
+                    }
+                } else if let Some(used) = &mut self.play_held {
+                    // Play + rueda: elegir pista del looper.
+                    *used = true;
+                    self.track = wrap(self.track, d, TRACKS);
+                    self.looper_shown_until = self.now + 2.0;
                 } else if self.play_mode == PlayMode::Secuencia {
                     self.seq_row = wrap(self.seq_row, d, 7);
                 } else if self.current.is_some() {
                     self.knob_color = wrap(self.knob_color, d, Direction::KNOB_CYCLE.len());
                     self.revoice(out);
+                } else if self.toast_text().is_none() {
+                    self.show_toast("Mantén Tono, Sonido, Modo o Play y gira la rueda");
                 }
             }
             (Knob::Tempo, Some(Menu::Tono)) => self.change(Item::Octava, d, out),
@@ -1769,11 +1837,11 @@ mod tests {
     fn perilla_magica_recorre_colores() {
         let mut s = State::default();
         press(&mut s, Control::Chord(0));
-        s.handle(Event::Turn(Knob::Magica, 1), 0.0);
+        s.handle(Event::Turn(Knob::Cursor, 1), 0.0);
         assert_eq!(s.current.as_ref().unwrap().chord.kind, ChordType::Minor);
-        s.handle(Event::Turn(Knob::Magica, 1), 0.0);
+        s.handle(Event::Turn(Knob::Cursor, 1), 0.0);
         assert_eq!(s.current.as_ref().unwrap().chord.kind, ChordType::Maj7);
-        s.handle(Event::Turn(Knob::Magica, -3), 0.0);
+        s.handle(Event::Turn(Knob::Cursor, -3), 0.0);
         assert_eq!(s.current.as_ref().unwrap().chord.kind, ChordType::Aug);
         // Al soltar el acorde vuelve a "normal".
         release(&mut s, Control::Chord(0));
@@ -1893,8 +1961,9 @@ mod tests {
         assert!(s.chord_held(1));
         release(&mut s, Control::Chord(1));
         assert!(!s.chord_held(1));
-        // Play arranca el ritmo.
-        let c = press(&mut s, Control::Play);
+        // Play arranca el ritmo (al soltarlo).
+        assert!(press(&mut s, Control::Play).is_empty());
+        let c = release(&mut s, Control::Play);
         assert!(c.contains(&Command::DrumsPlay(true)));
     }
 
@@ -1935,7 +2004,7 @@ mod tests {
         press(&mut s, Control::Track(0));
         assert_eq!(s.seq_pattern[0], 0);
         // Pulsar la perilla mágica sale a Ritmos con "Mi ritmo".
-        press(&mut s, Control::KnobPress(Knob::Magica));
+        press(&mut s, Control::KnobPress(Knob::Cursor));
         assert_eq!(s.play_mode, PlayMode::Ritmos);
         assert_eq!(s.drum_pattern(), s.seq_pattern);
         assert!(s.drums_playing);
@@ -2025,8 +2094,66 @@ mod tests {
             },
             0.0,
         );
-        let c = press(&mut s, Control::Play);
+        press(&mut s, Control::Play);
+        let c = release(&mut s, Control::Play);
         assert_eq!(c, [Command::LoopPlay(false)]);
+    }
+
+    #[test]
+    fn play_mas_rueda_elige_pista_sin_hacer_play() {
+        let mut s = State::default();
+        s.sync(
+            LooperStatus {
+                used: 1,
+                playing: true,
+                length: 2.0,
+                ..Default::default()
+            },
+            0.0,
+        );
+        press(&mut s, Control::Play);
+        s.handle(Event::Turn(Knob::Cursor, 2), 0.0);
+        assert_eq!(s.track, 2);
+        assert!(release(&mut s, Control::Play).is_empty());
+    }
+
+    #[test]
+    fn rueda_como_un_ipod_en_los_menus() {
+        let mut s = State::default();
+        press(&mut s, Control::Menu(Menu::Sonido));
+        release(&mut s, Control::Menu(Menu::Sonido));
+        // Girar mueve el cursor, sin cambiar nada.
+        let c = s.handle(Event::Turn(Knob::Cursor, 1), 0.0);
+        assert!(c.is_empty());
+        assert_eq!(s.selected_item(), Some(Item::Efecto));
+        // Play (o pulsar la rueda) entra a cambiar el valor; girar lo cambia.
+        press(&mut s, Control::Play);
+        release(&mut s, Control::Play);
+        assert!(s.menu_edit);
+        s.handle(Event::Turn(Knob::Cursor, 1), 0.0);
+        assert_eq!(s.effect, Effect::Eco);
+        // Pulsar otra vez vuelve a mover el cursor.
+        press(&mut s, Control::KnobPress(Knob::Cursor));
+        s.handle(Event::Turn(Knob::Cursor, -1), 0.0);
+        assert_eq!(s.selected_item(), Some(Item::Sonido));
+        assert_eq!(s.effect, Effect::Eco);
+        // Mantener Modo + rueda: cambia el modo.
+        press(&mut s, Control::Menu(Menu::Modo));
+        s.handle(Event::Turn(Knob::Cursor, 1), 0.0);
+        release(&mut s, Control::Menu(Menu::Modo));
+        assert_eq!(s.play_mode, PlayMode::Rasgueo);
+    }
+
+    #[test]
+    fn rueda_en_canciones() {
+        let mut s = State::default();
+        press(&mut s, Control::Canciones);
+        s.song_count = 1;
+        s.handle(Event::Turn(Knob::Cursor, 2), 0.0);
+        assert_eq!(s.song_focus, SongFocus::Export(0));
+        s.take_actions();
+        press(&mut s, Control::KnobPress(Knob::Cursor));
+        assert_eq!(s.take_actions(), [Action::Export(Format::Mp3)]);
     }
 
     #[test]
@@ -2085,8 +2212,8 @@ mod tests {
     fn fijar_el_color_de_un_acorde() {
         let mut s = State::default();
         press(&mut s, Control::Chord(0));
-        s.handle(Event::Turn(Knob::Magica, 2), 0.0); // 7ª
-        press(&mut s, Control::KnobPress(Knob::Magica));
+        s.handle(Event::Turn(Knob::Cursor, 2), 0.0); // 7ª
+        press(&mut s, Control::KnobPress(Knob::Cursor));
         release(&mut s, Control::Chord(0));
         assert_eq!(s.locks[0], Some(Direction::Right));
         // Al volver a tocarla, suena con su color fijado; las demás, normal.
@@ -2103,7 +2230,7 @@ mod tests {
         release(&mut s, Control::Arrow(Arrow::Down));
         assert_eq!(s.current.as_ref().unwrap().chord.kind, ChordType::Maj7);
         // Pulsar la perilla sin color la suelta.
-        press(&mut s, Control::KnobPress(Knob::Magica));
+        press(&mut s, Control::KnobPress(Knob::Cursor));
         assert_eq!(s.locks[0], None);
     }
 
@@ -2148,7 +2275,7 @@ mod tests {
         }
         assert_eq!(s.game.as_ref().unwrap().level, 4);
         // La perilla mágica sale.
-        press(&mut s, Control::KnobPress(Knob::Magica));
+        press(&mut s, Control::KnobPress(Knob::Cursor));
         assert!(s.game.is_none());
     }
 
@@ -2161,12 +2288,10 @@ mod tests {
         s.sample_count = 3;
         press(&mut s, Control::Arrow(Arrow::Up));
         assert_eq!(s.take_actions(), [Action::SelectSample(2)]);
-        press(&mut s, Control::Arrow(Arrow::Right));
-        press(&mut s, Control::Menu(Menu::Tono));
-        release(&mut s, Control::Menu(Menu::Tono));
+        // La rueda elige el botón y Play destroza.
+        s.handle(Event::Turn(Knob::Cursor, 1), 0.0);
+        press(&mut s, Control::Play);
         assert_eq!(s.take_actions(), [Action::Destroy(1)]);
-        // Soltar el menú no abre su página.
-        assert!(s.open_menu.is_none());
         press(&mut s, Control::Menu(Menu::Sonido));
         release(&mut s, Control::Menu(Menu::Sonido));
         press(&mut s, Control::Record);
@@ -2181,8 +2306,11 @@ mod tests {
         release(&mut s, Control::Chord(2));
         release(&mut s, Control::Menu(Menu::Sonido));
         assert_eq!(s.take_actions(), [Action::DrumSample(2)]);
-        press(&mut s, Control::Taller);
+        // El botón gris sale del taller, y soltarlo no abre su página.
+        press(&mut s, Control::Menu(Menu::Tono));
+        release(&mut s, Control::Menu(Menu::Tono));
         assert_eq!(s.screen, Screen::Tocar);
+        assert!(s.open_menu.is_none());
     }
 
     #[test]
@@ -2214,7 +2342,8 @@ mod tests {
         press(&mut s, Control::Chord(0));
         release(&mut s, Control::Chord(0));
         assert!(s.current.is_some());
-        let c = press(&mut s, Control::Play);
+        press(&mut s, Control::Play);
+        let c = release(&mut s, Control::Play);
         assert_eq!(c, [Command::StopChord]);
         assert!(s.current.is_none());
     }

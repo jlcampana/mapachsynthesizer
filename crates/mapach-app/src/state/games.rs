@@ -344,7 +344,7 @@ mod tests {
         tick(&mut s, 1.5);
         assert_eq!(s.simon.as_ref().unwrap().seq, seq);
         // Salir.
-        press(&mut s, Control::KnobPress(Knob::Magica));
+        press(&mut s, Control::KnobPress(Knob::Cursor));
         assert!(!s.in_game());
     }
 

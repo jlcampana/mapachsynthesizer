@@ -32,12 +32,12 @@ impl Menu {
 /// Las 3 perillas del mando (en el teclado se imitan con otras teclas).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Knob {
-    /// P1: volumen.
+    /// P1 (izquierda): volumen. Pulsar: silencio.
     Volumen,
-    /// P2: mágica (colores del acorde, navegar, valores de menú).
-    Magica,
-    /// P3: tempo.
+    /// P2 (centro): tempo. Pulsar: tap tempo.
     Tempo,
+    /// P3 (derecha, la grande): rueda-cursor, como la de un iPod. Pulsar: elegir.
+    Cursor,
 }
 
 /// Un control que se pulsa y se suelta.
