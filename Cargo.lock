@@ -1908,6 +1908,7 @@ dependencies = [
  "mapach-dsp",
  "mapach-engine",
  "mapach-input",
+ "mapach-project",
  "mapach-theory",
  "ron",
  "rtrb",

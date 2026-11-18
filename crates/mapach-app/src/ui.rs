@@ -12,8 +12,9 @@ use mapach_engine::{ARP_PATTERNS, RATES, SOUNDS, STRUM_MS, midi_to_freq};
 use mapach_input::{Arrow, Menu};
 use mapach_theory::{Direction, ModifierMode, NOTE_NAMES};
 
-use crate::state::{Item, PlayMode, State};
+use crate::state::{Item, PlayMode, Screen, SongFocus, State};
 use crate::theme::*;
+use mapach_project::SongInfo;
 
 pub const W: f32 = 960.0;
 pub const H: f32 = 540.0;
@@ -106,6 +107,18 @@ pub struct Extra<'a> {
     pub status: &'a str,
     /// Paso de la caja de ritmos que suena.
     pub drum_step: Option<usize>,
+    pub songs: Option<SongsView<'a>>,
+}
+
+/// Lo que hace falta para dibujar la pantalla de canciones.
+pub struct SongsView<'a> {
+    pub current: &'a str,
+    pub current_color: [u8; 3],
+    pub list: &'a [SongInfo],
+    pub busy: Option<&'a str>,
+    /// Segundos desde el último guardado.
+    pub saved_ago: Option<f64>,
+    pub last_export: Option<&'a std::path::Path>,
 }
 
 pub fn draw(c: &Canvas, st: &State, extra: &Extra) {
@@ -122,11 +135,21 @@ pub fn draw(c: &Canvas, st: &State, extra: &Extra) {
         AMARILLO_CLARO.lerp_to_gamma(AMARILLO, 0.5),
     );
 
-    top_bar(c, st);
-    menu_buttons(c, st);
-    screen(c, st, extra);
-    joystick(c, st);
-    chord_buttons(c, st);
+    if st.screen == Screen::Canciones {
+        songs_screen(c, st, extra);
+    } else {
+        top_bar(c, st);
+        menu_buttons(c, st);
+        screen(c, st, extra);
+        joystick(c, st);
+        chord_buttons(c, st);
+    }
+    if let Some(t) = st.toast_text() {
+        let w = 40.0 + t.chars().count() as f32 * 11.0;
+        c.rect(480.0 - w / 2.0, 76.0, w, 40.0, 20.0, hex(0x2ED573));
+        c.rect_stroke(480.0 - w / 2.0, 76.0, w, 40.0, 20.0, 3.0, BLANCO);
+        c.text(480.0, 96.0, Align2::CENTER_CENTER, t, 19.0, BLANCO);
+    }
 
     if !extra.status.is_empty() {
         c.text(
@@ -669,6 +692,7 @@ fn value_text(st: &State, item: Item) -> String {
         Item::Kit => format!("{} {}", KITS[st.kit].icon, KITS[st.kit].name),
         Item::Estilo => st.rhythm_name(),
         Item::Variacion => VARIATIONS[st.drum_variation].to_string(),
+        Item::Canciones => "▶".to_string(),
     }
 }
 
@@ -924,6 +948,215 @@ fn chord_buttons(c: &Canvas, st: &State) {
             tc.gamma_multiply(0.8),
         );
     }
+}
+
+fn rgb(c: [u8; 3]) -> Color32 {
+    Color32::from_rgb(c[0], c[1], c[2])
+}
+
+/// Pantalla "Mis canciones" (boceto 05-canciones-exportar.svg).
+fn songs_screen(c: &Canvas, st: &State, extra: &Extra) {
+    c.rect(36.0, 30.0, 300.0, 48.0, 24.0, hex(0x1EC8FF));
+    c.text(
+        186.0,
+        54.0,
+        Align2::CENTER_CENTER,
+        "♫ MIS CANCIONES",
+        24.0,
+        BLANCO,
+    );
+    let Some(sv) = &extra.songs else {
+        c.text(
+            480.0,
+            270.0,
+            Align2::CENTER_CENTER,
+            "Sin audio no hay canciones",
+            28.0,
+            MARRON,
+        );
+        return;
+    };
+    // Estado del guardado.
+    let (txt, col) = match (sv.busy, sv.saved_ago) {
+        (Some(b), _) => (b.to_string(), NARANJA),
+        (None, Some(ago)) if ago < 60.0 => (format!("✔ guardado hace {:.0} s", ago), hex(0x2ED573)),
+        (None, Some(_)) => ("✔ guardado".to_string(), hex(0x2ED573)),
+        (None, None) => ("se guarda solo".to_string(), MENU_GRIS),
+    };
+    let w = 30.0 + txt.chars().count() as f32 * 9.5;
+    c.rect(348.0, 36.0, w, 36.0, 18.0, col);
+    c.text(
+        348.0 + w / 2.0,
+        54.0,
+        Align2::CENTER_CENTER,
+        txt,
+        16.0,
+        BLANCO,
+    );
+    c.text(
+        924.0,
+        54.0,
+        Align2::RIGHT_CENTER,
+        "← → elegir · Espacio abrir · ↓ exportar · F5 salir",
+        14.0,
+        MARRON,
+    );
+
+    // Tarjetas: canciones y "Nueva" al final; se ven 4 a la vez.
+    let total = sv.list.len() + 1;
+    let focus = match st.song_focus {
+        SongFocus::Card(i) => Some(i.min(total - 1)),
+        SongFocus::Export(_) => None,
+    };
+    let start = focus
+        .map_or(0, |f| f.saturating_sub(3))
+        .min(total.saturating_sub(4));
+    for slot in 0..4 {
+        let i = start + slot;
+        if i >= total {
+            break;
+        }
+        let x = 36.0 + slot as f32 * 226.0;
+        let (y, w, h) = (96.0, 210.0, 210.0);
+        let sel = focus == Some(i);
+        if sel {
+            c.rect(x - 6.0, y - 6.0, w + 12.0, h + 12.0, 30.0, BLANCO);
+        }
+        if i == sv.list.len() {
+            c.rect(x, y, w, h, 26.0, hex(0xFFD23F));
+            c.rect_stroke(x, y, w, h, 26.0, 4.0, NARANJA);
+            c.circle(x + w / 2.0, y + 80.0, 38.0, NARANJA);
+            c.text(
+                x + w / 2.0,
+                y + 80.0,
+                Align2::CENTER_CENTER,
+                "+",
+                54.0,
+                BLANCO,
+            );
+            c.text(
+                x + w / 2.0,
+                y + 160.0,
+                Align2::CENTER_CENTER,
+                "Nueva",
+                26.0,
+                NARANJA,
+            );
+            continue;
+        }
+        let song = &sv.list[i];
+        let col = rgb(song.color);
+        c.rect(x, y, w, h, 26.0, col);
+        let tc = texto_sobre(col);
+        c.text(
+            x + w / 2.0,
+            y + 78.0,
+            Align2::CENTER_CENTER,
+            mapach_project::names::icon_for(&song.nombre),
+            64.0,
+            tc,
+        );
+        let size = if song.nombre.chars().count() > 16 {
+            18.0
+        } else {
+            23.0
+        };
+        c.text(
+            x + w / 2.0,
+            y + 150.0,
+            Align2::CENTER_CENTER,
+            &song.nombre,
+            size,
+            tc,
+        );
+        let pistas = match song.pistas {
+            1 => "1 pista".to_string(),
+            n => format!("{n} pistas"),
+        };
+        c.text(
+            x + w / 2.0,
+            y + 180.0,
+            Align2::CENTER_CENTER,
+            pistas,
+            15.0,
+            tc.gamma_multiply(0.85),
+        );
+        if song.nombre == sv.current {
+            c.rect(x + w - 82.0, y + 10.0, 72.0, 24.0, 12.0, BLANCO);
+            c.text(
+                x + w - 46.0,
+                y + 22.0,
+                Align2::CENTER_CENTER,
+                "★ ahora",
+                13.0,
+                MARRON,
+            );
+        }
+    }
+    if start > 0 {
+        c.text(22.0, 200.0, Align2::CENTER_CENTER, "◀", 24.0, MARRON);
+    }
+    if start + 4 < total {
+        c.text(938.0, 200.0, Align2::CENTER_CENTER, "▶", 24.0, MARRON);
+    }
+
+    // Exportar.
+    c.rect(32.0, 326.0, 896.0, 188.0, 30.0, NARANJA);
+    c.rect(40.0, 334.0, 880.0, 172.0, 24.0, OLED);
+    c.text(
+        66.0,
+        362.0,
+        Align2::LEFT_CENTER,
+        format!("Enviar \"{}\" a la familia:", sv.current),
+        22.0,
+        NEON_CIAN,
+    );
+    let buttons = [
+        ("MP3", "para el móvil", hex(0xFF3B30)),
+        ("OGG", "libre y ligero", hex(0xFF8A00)),
+        ("WAV", "máxima calidad", hex(0x3D7BFF)),
+    ];
+    for (i, (name, sub, col)) in buttons.into_iter().enumerate() {
+        let x = 66.0 + i as f32 * 210.0;
+        let sel = st.song_focus == SongFocus::Export(i);
+        if sel {
+            c.rect(x - 6.0, 384.0, 202.0, 102.0, 22.0, NEON_AMARILLO);
+        }
+        c.rect(x, 390.0, 190.0, 90.0, 18.0, col);
+        c.text(x + 95.0, 425.0, Align2::CENTER_CENTER, name, 34.0, BLANCO);
+        c.text(x + 95.0, 461.0, Align2::CENTER_CENTER, sub, 15.0, BLANCO);
+    }
+    let x = 712.0;
+    if let Some(b) = sv.busy {
+        c.text(x, 410.0, Align2::LEFT_CENTER, b, 18.0, NEON_AMARILLO);
+        c.rect(x, 430.0, 196.0, 22.0, 11.0, OLED_APAGADO);
+        // Barra que va y viene: no sabemos cuánto falta.
+        let t = (extra.time * 1.5).sin() as f32 * 0.5 + 0.5;
+        c.rect(x + t * 136.0, 430.0, 60.0, 22.0, 11.0, NEON_AMARILLO);
+    } else if let Some(p) = sv.last_export {
+        c.text(
+            x,
+            410.0,
+            Align2::LEFT_CENTER,
+            "✔ Exportada",
+            18.0,
+            hex(0x2ED573),
+        );
+        let name = p
+            .file_name()
+            .map(|f| f.to_string_lossy())
+            .unwrap_or_default();
+        c.text(x, 440.0, Align2::LEFT_CENTER, name, 13.0, NEON_CIAN);
+    }
+    c.text(
+        x,
+        474.0,
+        Align2::LEFT_CENTER,
+        "Música › Mapachsynthesizer\n› Exportadas",
+        11.0,
+        NEON_CIAN.gamma_multiply(0.6),
+    );
+    let _ = sv.current_color;
 }
 
 /// Pantalla del modo papá.

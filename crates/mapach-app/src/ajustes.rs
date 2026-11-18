@@ -36,6 +36,8 @@ pub struct Ajustes {
     pub variacion: usize,
     /// "Mi ritmo": 16 pasos, un bit por instrumento.
     pub mi_ritmo: Vec<u8>,
+    /// Carpeta de la última canción, para abrirla al arrancar ("" = ninguna).
+    pub cancion: String,
 }
 
 impl Default for Ajustes {
@@ -72,6 +74,7 @@ impl Ajustes {
             ritmo: s.drum_style,
             variacion: s.drum_variation,
             mi_ritmo: s.seq_pattern.to_vec(),
+            cancion: String::new(),
         }
     }
 

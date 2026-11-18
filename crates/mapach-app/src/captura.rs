@@ -27,6 +27,29 @@ impl Captura {
         })
     }
 
+    /// Canciones de mentira para la escena de canciones.
+    pub fn fake_songs(&self, songs: &mut crate::canciones::Songs) {
+        songs.current.nombre = "Dragón Naranja".into();
+        songs.list = [
+            "Dragón Naranja",
+            "Pulpo Saltarín",
+            "Estrella Mágica",
+            "Ballena Cósmica",
+            "Gato Veloz",
+        ]
+        .iter()
+        .enumerate()
+        .map(|(i, n)| mapach_project::SongInfo {
+            nombre: n.to_string(),
+            color: mapach_project::names::COLORS[i * 3 % 8],
+            guardada: 0,
+            carpeta: std::path::PathBuf::new(),
+            pistas: i + 1,
+        })
+        .collect();
+        songs.last_saved = Some(0.0);
+    }
+
     /// Eventos de cada escena de demostración.
     pub fn events(&self) -> Vec<Event> {
         use Control::*;
@@ -111,6 +134,8 @@ impl Captura {
                 v
             }
             10 => vec![p(Record), r(Record), p(Chord(0))],
+            11 => vec![p(Canciones), p(Arrow(A::Right))],
+            12 => vec![p(Canciones), p(Arrow(A::Down)), p(Arrow(A::Right))],
             _ => vec![],
         }
     }

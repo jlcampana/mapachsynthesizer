@@ -12,3 +12,5 @@ license = "MIT OR Apache-2.0"
 chunks_exact_to_as_chunks = "allow"
 # Los presets de sonido se escriben como una llamada con todos sus valores.
 too_many_arguments = "allow"
+# Recorrer por índice varias tablas a la vez (pistas, volúmenes…) se lee mejor así.
+needless_range_loop = "allow"

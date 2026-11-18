@@ -1,6 +1,7 @@
 //! Mapachsynthesizer: sintetizador para niños.
 
 mod ajustes;
+mod canciones;
 mod captura;
 mod keyboard;
 mod state;
@@ -15,7 +16,7 @@ use mapach_engine::audio::{self, AudioOutput};
 use mapach_input::{Control, Event, Knob, mando};
 
 use keyboard::KeyAction;
-use state::State;
+use state::{Action, State};
 
 fn main() -> eframe::Result {
     let captura = captura::Captura::from_args();
@@ -80,6 +81,8 @@ struct App {
     /// Últimos ajustes guardados y cuándo se miró por última vez.
     saved: ajustes::Ajustes,
     last_save_check: f64,
+    /// Canciones (solo si hay audio: sin motor no hay pistas que guardar).
+    songs: Option<canciones::Songs>,
 }
 
 impl App {
@@ -92,13 +95,31 @@ impl App {
         let (stx, mando_status_rx) = mpsc::channel();
         mando::spawn(tx, stx, move || ctx.request_repaint());
         let mut state = State::default();
+        let mut last_song = None;
         // En modo captura no se leen ni se guardan los ajustes del niño.
         if captura.is_none()
             && let Some(a) = ajustes::Ajustes::load()
         {
             a.apply(&mut state);
+            if !a.cancion.is_empty() {
+                last_song = Some(std::path::PathBuf::from(&a.cancion));
+            }
         }
         let saved = ajustes::Ajustes::from_state(&state);
+        let rate = audio.as_ref().map_or(48_000, |a| a.sample_rate);
+        let mut songs = Some(canciones::Songs::new(
+            canciones::Current::new_random(),
+            rate,
+        ));
+        if let (Some(cap), Some(songs)) = (&captura, &mut songs) {
+            cap.fake_songs(songs);
+        }
+        // Al arrancar se abre la última canción.
+        if let (Some(songs), Some(dir), true) = (&mut songs, last_song, audio.is_some())
+            && dir.join("cancion.ron").exists()
+        {
+            songs.load_folder(dir);
+        }
         let mut app = Self {
             audio,
             state,
@@ -112,6 +133,7 @@ impl App {
             captura,
             saved,
             last_save_check: 0.0,
+            songs,
         };
         let cmds = app.state.initial_commands();
         app.send_all(cmds);
@@ -144,13 +166,81 @@ impl App {
             return;
         }
         self.last_save_check = now;
-        let a = ajustes::Ajustes::from_state(&self.state);
+        let mut a = ajustes::Ajustes::from_state(&self.state);
+        if let Some(dir) = self.songs.as_ref().and_then(|s| s.current.carpeta.as_ref()) {
+            a.cancion = dir.to_string_lossy().into_owned();
+        }
         if a != self.saved {
             match a.save() {
                 Ok(()) => self.saved = a,
                 Err(e) => eprintln!("No se pudieron guardar los ajustes: {e}"),
             }
         }
+    }
+
+    /// Canciones: respuestas del motor, resultados de los hilos, acciones y autoguardado.
+    fn songs_tick(&mut self, now: f64) {
+        let actions = self.state.take_actions();
+        let (Some(songs), Some(audio)) = (&mut self.songs, &mut self.audio) else {
+            for a in actions {
+                match a {
+                    Action::OpenSongs => {
+                        if let Some(s) = &self.songs {
+                            self.state.song_count = s.list.len();
+                        }
+                    }
+                    _ => self
+                        .state
+                        .show_toast("Sin audio no se pueden guardar canciones"),
+                }
+            }
+            return;
+        };
+        songs.pump_replies(audio);
+        while let Some(done) = songs.poll() {
+            match done {
+                canciones::Done::Loaded(song, dir) => {
+                    let name = song.nombre.clone();
+                    songs.apply_loaded(*song, dir, &mut self.state, audio);
+                    self.state.show_toast(format!("🎵 {name}"));
+                }
+                canciones::Done::Saved(_) => songs.last_saved = Some(now),
+                canciones::Done::Exported(p) => {
+                    let file = p.file_name().map(|f| f.to_string_lossy().into_owned());
+                    self.state.show_toast(format!(
+                        "✔ {} en Música › Exportadas",
+                        file.unwrap_or_default()
+                    ));
+                }
+                canciones::Done::Failed(e) => {
+                    eprintln!("Canciones: {e}");
+                    self.state.show_toast("Algo ha fallado al guardar 😕");
+                }
+            }
+        }
+        for a in actions {
+            match a {
+                Action::OpenSongs => {
+                    songs.refresh_list();
+                    self.state.song_count = songs.list.len();
+                }
+                Action::Load(i) => songs.begin_load(i),
+                Action::New => {
+                    songs.new_song(&mut self.state, audio);
+                    self.state
+                        .show_toast(format!("✨ {}", songs.current.nombre));
+                }
+                Action::Export(f) => {
+                    if self.state.looper.is_empty() {
+                        self.state
+                            .show_toast("Primero graba algo en el looper (Espacio)");
+                    } else if !songs.is_busy() {
+                        songs.begin_save(&self.state, audio, Some(f));
+                    }
+                }
+            }
+        }
+        songs.autosave(now, self.state.looper, &self.state, audio);
     }
 
     fn papa_lines(&self) -> Vec<String> {
@@ -226,6 +316,7 @@ impl eframe::App for App {
             .unwrap_or(self.state.looper);
         let cmds = self.state.sync(looper, now);
         self.send_all(cmds);
+        self.songs_tick(now);
 
         let focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
         if self.focused && !focused {
@@ -318,6 +409,14 @@ impl eframe::App for App {
             ),
             None => (0.0, "sin audio".into()),
         };
+        let songs_view = self.songs.as_ref().map(|s| ui::SongsView {
+            current: &s.current.nombre,
+            current_color: s.current.color,
+            list: &s.list,
+            busy: s.busy.as_deref(),
+            saved_ago: s.last_saved.map(|t| now - t),
+            last_export: s.last_export.as_deref(),
+        });
         ui::draw(
             &canvas,
             &self.state,
@@ -326,6 +425,7 @@ impl eframe::App for App {
                 peak,
                 status: &status,
                 drum_step,
+                songs: songs_view,
             },
         );
         if self.papa {

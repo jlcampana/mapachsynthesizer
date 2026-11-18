@@ -8,6 +8,7 @@ use mapach_engine::looper::{LooperStatus, TRACKS};
 use mapach_engine::{ARP_PATTERNS, Command, Param, RATES, SOUNDS, STRUM_MS, Style};
 use mapach_input::mando;
 use mapach_input::{Arrow, Control, Event, Knob, Menu};
+use mapach_project::Format;
 use mapach_theory::{
     BUTTONS, Chord, Direction, Key, ModifierMode, Scale, VoicingOptions, voice_lead,
 };
@@ -81,6 +82,35 @@ impl PlayMode {
     }
 }
 
+/// Pantallas.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Screen {
+    #[default]
+    Tocar,
+    Canciones,
+}
+
+/// Cosas que la app tiene que hacer fuera de la lógica (leer y escribir ficheros).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Action {
+    /// Abrir la pantalla de canciones (hay que leer la lista).
+    OpenSongs,
+    /// Cargar la canción número `n` de la lista.
+    Load(usize),
+    /// Canción nueva (vacía).
+    New,
+    Export(Format),
+}
+
+/// Fila elegida en la pantalla de canciones.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SongFocus {
+    /// Tarjeta `n` (la última es "Nueva").
+    Card(usize),
+    /// Botón de exportar `n` (MP3, OGG, WAV).
+    Export(usize),
+}
+
 /// Lo que suena ahora en modo Tocar.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sounding {
@@ -112,6 +142,8 @@ pub enum Item {
     Kit,
     Estilo,
     Variacion,
+    /// Abre la pantalla de canciones (para llegar desde el mando).
+    Canciones,
 }
 
 impl Item {
@@ -125,6 +157,7 @@ impl Item {
                 Item::Acordes,
                 Item::Bajo,
                 Item::Nombres,
+                Item::Canciones,
             ],
             Menu::Sonido => &[Item::Sonido, Item::Ataque, Item::Release, Item::Brillo],
             Menu::Modo => &[
@@ -160,6 +193,7 @@ impl Item {
             Item::Kit => "Batería",
             Item::Estilo => "Ritmo",
             Item::Variacion => "Variación",
+            Item::Canciones => "Mis canciones",
         }
     }
 }
@@ -203,6 +237,13 @@ pub struct State {
     pub seq_row: usize,
     /// Último golpe de batería (para la pantalla).
     pub last_hit: Option<u8>,
+    pub screen: Screen,
+    pub song_focus: SongFocus,
+    /// Canciones en la lista (lo dice la app al leer la carpeta).
+    pub song_count: usize,
+    actions: Vec<Action>,
+    /// Mensaje corto en pantalla y hasta cuándo.
+    pub toast: Option<(String, f64)>,
     /// Pista elegida del looper.
     pub track: usize,
     /// Estado del looper que llega del motor.
@@ -262,6 +303,11 @@ impl Default for State {
             seq_pattern: drums::EMPTY,
             seq_row: 0,
             last_hit: None,
+            screen: Screen::Tocar,
+            song_focus: SongFocus::Card(0),
+            song_count: 0,
+            actions: Vec::new(),
+            toast: None,
             track: 0,
             looper: LooperStatus::default(),
             track_volume: [1.0; TRACKS],
@@ -346,6 +392,73 @@ impl State {
         }
         self.drums_playing = on;
         out.push(Command::DrumsPlay(on));
+    }
+
+    /// Saca las acciones pendientes para la app.
+    pub fn take_actions(&mut self) -> Vec<Action> {
+        std::mem::take(&mut self.actions)
+    }
+
+    /// Enseña un mensaje unos segundos.
+    pub fn show_toast(&mut self, text: impl Into<String>) {
+        self.toast = Some((text.into(), self.now + 3.0));
+    }
+
+    pub fn toast_text(&self) -> Option<&str> {
+        self.toast
+            .as_ref()
+            .filter(|(_, until)| self.now < *until)
+            .map(|(t, _)| t.as_str())
+    }
+
+    fn open_songs(&mut self) {
+        self.screen = Screen::Canciones;
+        self.open_menu = None;
+        self.song_focus = SongFocus::Card(0);
+        self.actions.push(Action::OpenSongs);
+    }
+
+    /// Controles en la pantalla de canciones. Devuelve `true` si el control se ha usado.
+    fn songs_press(&mut self, c: Control) -> bool {
+        let cards = self.song_count + 1;
+        match (c, self.song_focus) {
+            (Control::Arrow(Arrow::Left), SongFocus::Card(i)) => {
+                self.song_focus = SongFocus::Card(wrap(i, -1, cards));
+            }
+            (Control::Arrow(Arrow::Right), SongFocus::Card(i)) => {
+                self.song_focus = SongFocus::Card(wrap(i, 1, cards));
+            }
+            (Control::Arrow(Arrow::Down), SongFocus::Card(_)) => {
+                self.song_focus = SongFocus::Export(0);
+            }
+            (Control::Arrow(Arrow::Left), SongFocus::Export(i)) => {
+                self.song_focus = SongFocus::Export(wrap(i, -1, Format::ALL.len()));
+            }
+            (Control::Arrow(Arrow::Right), SongFocus::Export(i)) => {
+                self.song_focus = SongFocus::Export(wrap(i, 1, Format::ALL.len()));
+            }
+            (Control::Arrow(Arrow::Up), SongFocus::Export(_)) => {
+                self.song_focus = SongFocus::Card(0);
+            }
+            (Control::Arrow(_), _) => {}
+            (Control::Record | Control::KnobPress(Knob::Tempo), SongFocus::Card(i)) => {
+                self.actions.push(if i >= self.song_count {
+                    Action::New
+                } else {
+                    Action::Load(i)
+                });
+                self.screen = Screen::Tocar;
+            }
+            (Control::Record | Control::KnobPress(Knob::Tempo), SongFocus::Export(i)) => {
+                self.actions
+                    .push(Action::Export(Format::ALL[i % Format::ALL.len()]));
+            }
+            (Control::Canciones | Control::KnobPress(Knob::Magica) | Control::Menu(_), _) => {
+                self.screen = Screen::Tocar
+            }
+            _ => return false,
+        }
+        true
     }
 
     /// Segundos que hay que mantener una pista para borrarla.
@@ -543,7 +656,12 @@ impl State {
     }
 
     fn press(&mut self, c: Control, now: f64, out: &mut Vec<Command>) {
+        self.now = self.now.max(now);
+        if self.screen == Screen::Canciones && self.songs_press(c) {
+            return;
+        }
         match c {
+            Control::Canciones => self.open_songs(),
             // Grabar + tecla de acorde 1–6 (en el mando): elegir pista.
             Control::Chord(b) if self.record_held.is_some() && (b as usize) < TRACKS => {
                 self.record_held = Some(true);
@@ -917,6 +1035,7 @@ impl State {
                 self.drum_variation = wrap(self.drum_variation, d, VARIATIONS.len());
                 out.push(Command::SetPattern(self.drum_pattern()));
             }
+            Item::Canciones => self.open_songs(),
         }
     }
 
@@ -1443,6 +1562,39 @@ mod tests {
         );
         let c = press(&mut s, Control::Play);
         assert_eq!(c, [Command::LoopPlay(false)]);
+    }
+
+    #[test]
+    fn pantalla_de_canciones() {
+        let mut s = State::default();
+        press(&mut s, Control::Canciones);
+        assert_eq!(s.screen, Screen::Canciones);
+        assert_eq!(s.take_actions(), [Action::OpenSongs]);
+        s.song_count = 2;
+        // ← desde la primera da la vuelta a "Nueva".
+        press(&mut s, Control::Arrow(Arrow::Left));
+        assert_eq!(s.song_focus, SongFocus::Card(2));
+        press(&mut s, Control::Record);
+        assert_eq!(s.take_actions(), [Action::New]);
+        assert_eq!(s.screen, Screen::Tocar);
+
+        // Exportar a OGG: abajo, derecha, Espacio.
+        press(&mut s, Control::Canciones);
+        s.take_actions();
+        press(&mut s, Control::Arrow(Arrow::Down));
+        press(&mut s, Control::Arrow(Arrow::Right));
+        press(&mut s, Control::Record);
+        assert_eq!(s.take_actions(), [Action::Export(Format::Ogg)]);
+        // Sigue en la pantalla; F5 sale.
+        press(&mut s, Control::Canciones);
+        assert_eq!(s.screen, Screen::Tocar);
+    }
+
+    #[test]
+    fn canciones_desde_el_menu_gris() {
+        let mut s = State::default();
+        s.change(Item::Canciones, 1, &mut Vec::new());
+        assert_eq!(s.screen, Screen::Canciones);
     }
 
     #[test]

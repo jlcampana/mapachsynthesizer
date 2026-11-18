@@ -58,6 +58,43 @@ const ADJECTIVES: &[(&str, &str)] = &[
     ("Espacial", "Espacial"),
 ];
 
+/// Icono para la tarjeta de una canción, según su primera palabra.
+pub fn icon_for(name: &str) -> &'static str {
+    match name.split(' ').next().unwrap_or("") {
+        "Dragón" => "🐉",
+        "Pulpo" => "🐙",
+        "Mapache" => "🦝",
+        "Cohete" => "🚀",
+        "Pingüino" => "🐧",
+        "Dinosaurio" => "🦕",
+        "Robot" => "🤖",
+        "Unicornio" => "🦄",
+        "Volcán" => "🌋",
+        "Koala" => "🐨",
+        "Tiburón" => "🦈",
+        "Gato" => "🐱",
+        "Perro" => "🐶",
+        "Búho" => "🦉",
+        "Caracol" => "🐌",
+        "Murciélago" => "🦇",
+        "Jirafa" => "🦒",
+        "Ballena" => "🐳",
+        "Tortuga" => "🐢",
+        "Medusa" => "🪼",
+        "Nube" => "☁",
+        "Estrella" => "⭐",
+        "Mariposa" => "🦋",
+        "Rana" => "🐸",
+        "Abeja" => "🐝",
+        "Luna" => "🌙",
+        "Pizza" => "🍕",
+        "Galleta" => "🍪",
+        "Ardilla" => "🐿",
+        "Cebra" => "🦓",
+        _ => "🎵",
+    }
+}
+
 /// Colores vivos para las tarjetas de las canciones.
 pub const COLORS: [[u8; 3]; 8] = [
     [0xFF, 0x3B, 0x3B],
@@ -101,6 +138,14 @@ mod tests {
                 .unwrap();
             assert_eq!(adj, if fem { pair.1 } else { pair.0 }, "{name}");
         }
+    }
+
+    #[test]
+    fn todos_tienen_icono() {
+        for (n, _) in NOUNS {
+            assert_ne!(icon_for(n), "🎵", "{n}");
+        }
+        assert_eq!(icon_for("Lo que sea"), "🎵");
     }
 
     #[test]
