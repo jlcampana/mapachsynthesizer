@@ -177,6 +177,19 @@ impl App {
             cap.fake_taller(&mut app.taller);
             app.papa = cap.demo == 14;
         }
+        // Los samples de los atajos.
+        let atajos = app.state.shortcuts.clone();
+        for (i, path) in atajos.iter().enumerate() {
+            if let Some(p) = path {
+                match taller::load_instrument(std::path::Path::new(p)) {
+                    Some((data, _)) => app.send_all(vec![Command::SetShortcut {
+                        slot: i as u8,
+                        data: Some(data),
+                    }]),
+                    None => app.state.shortcuts[i] = None,
+                }
+            }
+        }
         // Los samples puestos en la batería.
         let golpes = app.state.drum_samples.clone();
         for (d, path) in golpes.iter().enumerate() {
@@ -258,6 +271,7 @@ impl App {
                         | Action::UndoSample
                         | Action::UseSample
                         | Action::DrumSample(_)
+                        | Action::AssignShortcut(_)
                 )
             });
         for a in taller_actions {
@@ -422,6 +436,30 @@ impl App {
                         "🥁 La tecla {} de la batería suena a «{name}»",
                         b + 1
                     ));
+                }
+            }
+            Action::AssignShortcut(i) => {
+                let Some((data, _, name, path)) = t.for_instrument() else {
+                    self.state.show_toast("Primero elige o graba un sonido");
+                    return;
+                };
+                let path = path.to_string_lossy().into_owned();
+                let slot = &mut self.state.shortcuts[i as usize];
+                if slot.as_deref() == Some(&path) {
+                    *slot = None;
+                    link.send(Command::SetShortcut {
+                        slot: i,
+                        data: None,
+                    });
+                    self.state.show_toast(format!("Atajo {} vacío", i + 1));
+                } else {
+                    *slot = Some(path);
+                    link.send(Command::SetShortcut {
+                        slot: i,
+                        data: Some(data),
+                    });
+                    self.state
+                        .show_toast(format!("⚡ El atajo {} suena a «{name}»", i + 1));
                 }
             }
             Action::UseSample => {

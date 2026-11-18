@@ -68,7 +68,8 @@ sudo apt install libasound2-dev          # Ubuntu / Debian
 | `B` | Tap tempo |
 | `Espacio` | Grabar en el looper (con un menú pulsado: 🎲 al azar) |
 | `1`–`6` | Elegir pista del looper (mantener: borrarla) |
-| `Intro` | Play / pausa del looper y del ritmo |
+| `Intro` | OK: elegir en menús; si no, play / pausa |
+| `V N M ,` | Atajos a samples (fila 3 del mando) |
 | `F5` | Mis canciones |
 | `Esc` | Cerrar el programa |
 | `Ctrl+Alt+P` | Modo papá (ajustes) |

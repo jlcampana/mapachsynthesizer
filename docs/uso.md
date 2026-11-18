@@ -11,7 +11,8 @@ Guía rápida. El mapeo completo del mando está en [mando.md](mando.md).
 | Rueda del ratón | Rueda grande (derecha) | Cursor, como en un iPod (ver abajo) |
 | `RePág` / `AvPág` | Perilla izquierda | Volumen (pulsarla: silencio) |
 | `-` / `+` | Perilla del centro | Tempo (`B`: tap tempo) |
-| `Intro` | Play | Play / pausa; en los menús, el botón central del iPod |
+| `Intro` | OK (verde) | El botón central del iPod en menús, Canciones y Taller; si no, play / pausa |
+| `V N M ,` | Atajos (fila 3) | Disparan los samples que les hayas puesto |
 
 ### La rueda grande
 
@@ -62,8 +63,9 @@ Las canciones se guardan solas y la app abre la última al arrancar. En la panta
 
 ## Taller de samples (`Tab`)
 
-Grabar (`Espacio`) graba con el micro (hasta 10 s), ↑↓ eligen sonido (y suena), la rueda elige un
-botón de destrozar y Play (`Intro`) lo aplica. Los botones de colores: **gris** sale, **rojo** deshace y
+Grabar (`Espacio`) graba con el micro (hasta 10 s) y la rueda elige sonido (y suena). Para
+destrozarlo, mantén OK, gira la rueda hasta el botón que quieras y suelta OK; pulsar OK sin girar
+repite el último. Los botones de colores: **gris** sale, **rojo** deshace y
 **amarillo** usa el sonido en los acordes ("Mi sample"). Mantener el amarillo y pulsar una tecla de
 acorde pone el sonido en ese golpe de la batería (otra vez lo mismo: vuelve el golpe de serie). Para traer sonidos de fuera, déjalos en
 `Música/Mapachsynthesizer/Importar` (WAV, MP3, OGG o FLAC) y abre el taller.
@@ -77,6 +79,12 @@ acorde pone el sonido en ese golpe de la batería (otra vez lo mismo: vuelve el 
 
 Play (`Intro`) repite y cualquier botón de color sale. Equivocarse nunca castiga: se vuelve a
 intentar. Los juegos dan **estrellas** ⭐ y con 10 y 25 se desbloquean dos sonidos secretos.
+
+## Atajos a samples
+
+La fila 3 del mando (en el teclado, `V N M ,`) son 4 atajos: cada uno dispara un sample entero, que
+también se graba en el looper. Para ponerle un sonido a un atajo: en el Taller, elige el sonido con
+la rueda, mantén el botón amarillo y pulsa el atajo. Hacerlo otra vez con el mismo sonido lo vacía.
 
 ## Presets
 

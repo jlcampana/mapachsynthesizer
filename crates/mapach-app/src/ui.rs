@@ -9,7 +9,7 @@ use mapach_dsp::drums::{Drum, KITS};
 use mapach_engine::drums::{STYLES, VARIATIONS};
 use mapach_engine::looper::TRACKS;
 use mapach_engine::{ARP_PATTERNS, RATES, SOUNDS, STRUM_MS, midi_to_freq};
-use mapach_input::{Arrow, Menu};
+use mapach_input::Menu;
 use mapach_theory::{Direction, ModifierMode, NOTE_NAMES};
 
 use crate::state::{Item, PlayMode, Screen, SongFocus, State};
@@ -434,7 +434,7 @@ fn looper_view(c: &Canvas, st: &State, extra: &Extra) {
         690.0,
         112.0,
         Align2::RIGHT_CENTER,
-        "▶ + rueda: pista · ● grabar · ▶ seguir/parar",
+        "OK + rueda: pista · ● grabar · OK: seguir o parar",
         13.0,
         NEON_CIAN.gamma_multiply(0.7),
     );
@@ -744,9 +744,9 @@ fn menu_page(c: &Canvas, st: &State, m: Menu, sel: Option<usize>) {
         c.text(674.0, y, Align2::RIGHT_CENTER, v, 16.0, tc);
     }
     let hint = if st.menu_edit {
-        "Rueda: cambiar · Play: listo"
+        "Rueda: cambiar · OK: listo"
     } else {
-        "Rueda: elegir · Play: cambiar"
+        "Rueda: elegir · OK: cambiar"
     };
     c.text(686.0, 121.0, Align2::RIGHT_CENTER, hint, 13.0, TEXTO_2);
 }
@@ -851,7 +851,7 @@ fn mando_panel(c: &Canvas, st: &State) {
     knob(818.0, 12.0, &format!("{:.0} bpm", st.bpm), false);
     knob(890.0, 22.0, st.cursor_role(), true);
 
-    // Teclas: 4 × 4.
+    // Teclas: acordes, Grabar, los 4 atajos a samples y los botones de abajo.
     let held_menu = st.menu_held();
     let (kx, ky, ks, gap) = (754.0, 176.0, 38.0, 4.0);
     for n in 0..16usize {
@@ -870,10 +870,17 @@ fn mando_panel(c: &Canvas, st: &State) {
                 "●".into(),
                 st.record_pressed() || st.looper.recording.is_some(),
             ),
-            8 => (dark, "←".into(), st.arrow_held(Arrow::Left)),
-            9 => (dark, "↑".into(), st.arrow_held(Arrow::Up)),
-            10 => (dark, "↓".into(), st.arrow_held(Arrow::Down)),
-            11 => (dark, "→".into(), st.arrow_held(Arrow::Right)),
+            8..=11 => {
+                let i = n - 8;
+                let glyph = match &st.shortcuts[i] {
+                    Some(p) => std::path::Path::new(p)
+                        .file_stem()
+                        .map(|f| f.to_string_lossy().chars().take(3).collect())
+                        .unwrap_or_default(),
+                    None => "+".into(),
+                };
+                (hex(0x3A3346), glyph, st.shortcut_held[i])
+            }
             12 => (MENU_GRIS, String::new(), held_menu == Some(Menu::Tono)),
             13 => (
                 MENU_AMARILLO,
@@ -881,7 +888,7 @@ fn mando_panel(c: &Canvas, st: &State) {
                 held_menu == Some(Menu::Sonido),
             ),
             14 => (MENU_ROJO, String::new(), held_menu == Some(Menu::Modo)),
-            _ => (dark, "▶".into(), st.play_pressed()),
+            _ => (VERDE, "OK".into(), st.play_pressed()),
         };
         let fill = if pressed {
             fill.lerp_to_gamma(BLANCO, 0.35)
@@ -892,19 +899,18 @@ fn mando_panel(c: &Canvas, st: &State) {
         if pressed {
             c.rect_stroke(x - 2.0, y - 2.0, ks + 4.0, ks + 4.0, 7.0, 2.0, BLANCO);
         }
-        let tc = if n == 7 {
-            MENU_ROJO
-        } else if !(7..12).contains(&n) {
-            texto_sobre(fill)
-        } else {
-            TEXTO
+        let tc = match n {
+            7 => MENU_ROJO,
+            8..=11 if st.shortcuts[n - 8].is_none() => TEXTO_2,
+            _ => texto_sobre(fill),
         };
+        let size = if (8..=11).contains(&n) { 11.0 } else { 14.0 };
         c.text(
             x + ks / 2.0,
             y + ks / 2.0,
             Align2::CENTER_CENTER,
             glyph,
-            14.0,
+            size,
             tc,
         );
     }
@@ -1024,7 +1030,7 @@ fn follow_view(c: &Canvas, f: &crate::state::Follow, st: &State) {
     let hint = if st.highlight().is_some_and(|(_, high)| high) {
         "↑ = la fila de arriba (Q W E R T Y U)"
     } else {
-        "Pulsa la tecla que brilla · ▶ desde el principio"
+        "Pulsa la tecla que brilla · OK: desde el principio"
     };
     c.text(
         430.0,
@@ -1099,7 +1105,7 @@ fn game_view(c: &Canvas, g: &crate::state::EarGame, extra: &Extra, st: &State) {
         430.0,
         276.0,
         Align2::CENTER_CENTER,
-        "▶ otra vez · un botón de color: salir",
+        "OK: otra vez · un botón de color: salir",
         13.0,
         NEON_CIAN.gamma_multiply(0.7),
     );
@@ -1153,9 +1159,9 @@ fn drums_view(c: &Canvas, st: &State, extra: &Extra) {
         }
         _ => {
             let hint = if st.drums_playing {
-                "■ Play para parar"
+                "OK para parar"
             } else {
-                "▶ Play para empezar"
+                "OK para empezar"
             };
             c.text(430.0, 180.0, Align2::CENTER_CENTER, hint, 22.0, NEON_CIAN);
         }
@@ -1371,7 +1377,7 @@ fn songs_screen(c: &Canvas, st: &State, extra: &Extra) {
         36.0,
         530.0,
         Align2::LEFT_CENTER,
-        "Rueda: elegir · ▶: abrir o exportar · un botón de color: salir",
+        "Rueda: elegir · OK: abrir o exportar · un botón de color: salir",
         14.0,
         MARRON,
     );
@@ -1541,7 +1547,7 @@ fn taller_screen(c: &Canvas, st: &State, extra: &Extra) {
         924.0,
         54.0,
         Align2::RIGHT_CENTER,
-        "↑↓ sonido · Rueda: botón · ▶ destrozar · ● grabar",
+        "Rueda: sonido · ● grabar · OK + rueda: destrozo",
         14.0,
         MARRON,
     );
@@ -1658,7 +1664,7 @@ fn taller_screen(c: &Canvas, st: &State, extra: &Extra) {
         290.0,
         362.0,
         Align2::LEFT_CENTER,
-        "¡DESTRÓZALO!   Rueda: elegir · ▶ aplicar · amarillo + tecla: a la batería",
+        "¡DESTRÓZALO!  Mantén OK y gira, suelta para aplicar · amarillo + tecla: batería o atajo",
         17.0,
         MARRON,
     );

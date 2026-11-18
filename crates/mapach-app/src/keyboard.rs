@@ -65,6 +65,11 @@ pub fn translate(key: Key, mods: Modifiers, pressed: bool) -> Option<KeyAction> 
         K::F5 => ev(Control::Canciones),
         K::Tab => ev(Control::Taller),
         K::B => ev(Control::Tap),
+        // Atajos a samples (en el mando, la fila de las teclas 9–12).
+        K::V => ev(Control::Shortcut(0)),
+        K::N => ev(Control::Shortcut(1)),
+        K::M => ev(Control::Shortcut(2)),
+        K::Comma => ev(Control::Shortcut(3)),
         K::Backspace => ev(Control::Undo),
         // Perillas sin hardware: RePág/AvPág = volumen, -/+ = tempo. La mágica va con la rueda
         // del ratón.

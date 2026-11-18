@@ -137,6 +137,8 @@ pub enum Action {
     UseSample,
     /// Poner (o quitar) el sample elegido en el golpe de batería `n`.
     DrumSample(u8),
+    /// Poner (o quitar) el sample elegido en el atajo `n`.
+    AssignShortcut(u8),
 }
 
 /// Fila elegida en la pantalla de canciones.
@@ -328,6 +330,10 @@ pub struct State {
     pub song_focus: SongFocus,
     /// Canciones en la lista (lo dice la app al leer la carpeta).
     pub song_count: usize,
+    /// Samples de los atajos (ruta).
+    pub shortcuts: [Option<String>; mapach_engine::SHORTCUTS],
+    /// Atajos pulsados (para el dibujo del mando).
+    pub shortcut_held: [bool; mapach_engine::SHORTCUTS],
     /// Samples puestos en cada golpe de batería (ruta).
     pub drum_samples: [Option<String>; BUTTONS],
     /// Colores fijados en cada tecla (chord lock).
@@ -426,6 +432,8 @@ impl Default for State {
             song_count: 0,
             locks: [None; BUTTONS],
             drum_samples: Default::default(),
+            shortcuts: Default::default(),
+            shortcut_held: [false; mapach_engine::SHORTCUTS],
             game: None,
             simon: None,
             follow: None,
@@ -602,7 +610,9 @@ impl State {
             Control::Record => self.actions.push(Action::MicToggle),
             // Play hace de botón central: aplica el destrozo elegido con la rueda (y se escucha).
             // La rueda elige el botón de destrozar y al pulsarla lo aplica.
-            Control::Play | Control::KnobPress(Knob::Cursor) => {
+            // OK: al soltarlo aplica el destrozo (mantener OK y girar la rueda lo elige).
+            Control::Play => self.play_held = Some(false),
+            Control::KnobPress(Knob::Cursor) => {
                 self.actions.push(Action::Destroy(self.destroy_sel))
             }
             // Los botones de colores: amarillo lo usa en los acordes (al soltarlo; si mientras
@@ -617,6 +627,10 @@ impl State {
             {
                 self.menu_used = true;
                 self.actions.push(Action::DrumSample(b));
+            }
+            Control::Shortcut(i) if self.menus_held[menu_idx(Menu::Sonido)] => {
+                self.menu_used = true;
+                self.actions.push(Action::AssignShortcut(i));
             }
             Control::Menu(Menu::Modo) | Control::Undo => self.actions.push(Action::UndoSample),
             Control::Taller | Control::Menu(Menu::Tono) | Control::Canciones => {
@@ -860,6 +874,7 @@ impl State {
 
     /// Suelta todo lo pulsado (al perder el foco o abrir el modo papá).
     pub fn release_all(&mut self) {
+        self.shortcut_held = [false; mapach_engine::SHORTCUTS];
         self.play_held = None;
         self.preset_hold = None;
         self.track_hold = None;
@@ -909,10 +924,6 @@ impl State {
         } else {
             "elegir"
         }
-    }
-
-    pub fn arrow_held(&self, a: Arrow) -> bool {
-        self.arrows[arrow_idx(a)]
     }
 
     pub fn chord_held(&self, button: u8) -> bool {
@@ -1029,6 +1040,16 @@ impl State {
             }
         }
         match c {
+            Control::Shortcut(i) if (i as usize) < mapach_engine::SHORTCUTS => {
+                self.shortcut_held[i as usize] = true;
+                if self.shortcuts[i as usize].is_some() {
+                    out.push(Command::PlayShortcut(i));
+                } else {
+                    self.show_toast(
+                        "Atajo vacío: en el Taller, mantén amarillo y pulsa esta tecla",
+                    );
+                }
+            }
             Control::Canciones => self.open_songs(),
             Control::Taller => self.open_taller(),
             // Grabar + tecla de acorde 1–6 (en el mando): elegir pista.
@@ -1197,6 +1218,12 @@ impl State {
     }
 
     fn release_control(&mut self, c: Control, out: &mut Vec<Command>) {
+        if self.screen == Screen::Taller && c == Control::Play {
+            if self.play_held.take().is_some() {
+                self.actions.push(Action::Destroy(self.destroy_sel));
+            }
+            return;
+        }
         // En el taller, los menús son botones: no abren nada al soltarlos.
         if self.screen == Screen::Taller && matches!(c, Control::Menu(_)) {
             if c == Control::Menu(Menu::Sonido) {
@@ -1248,6 +1275,11 @@ impl State {
                     self.play_action(out);
                 }
             }
+            Control::Shortcut(i) => {
+                if let Some(h) = self.shortcut_held.get_mut(i as usize) {
+                    *h = false;
+                }
+            }
             Control::Track(t) => {
                 if self.track_hold.is_some_and(|(h, _)| h == t as usize) {
                     self.track_hold = None;
@@ -1278,8 +1310,16 @@ impl State {
 
     fn turn(&mut self, k: Knob, d: i32, out: &mut Vec<Command>) {
         if self.screen == Screen::Taller && k == Knob::Cursor {
-            let buttons = mapach_samples::destroy::Destroy::ALL.len();
-            self.destroy_sel = wrap(self.destroy_sel, d, buttons);
+            if let Some(used) = &mut self.play_held {
+                // OK mantenido + rueda: elegir el botón de destrozar.
+                *used = true;
+                let buttons = mapach_samples::destroy::Destroy::ALL.len();
+                self.destroy_sel = wrap(self.destroy_sel, d, buttons);
+            } else if self.sample_count > 0 {
+                // Rueda sola: elegir sonido (y suena).
+                self.sample_sel = wrap(self.sample_sel, d, self.sample_count);
+                self.actions.push(Action::SelectSample(self.sample_sel));
+            }
             return;
         }
         if self.screen == Screen::Canciones && k == Knob::Cursor {
@@ -1332,7 +1372,7 @@ impl State {
                     self.knob_color = wrap(self.knob_color, d, Direction::KNOB_CYCLE.len());
                     self.revoice(out);
                 } else if self.toast_text().is_none() {
-                    self.show_toast("Mantén Tono, Sonido, Modo o Play y gira la rueda");
+                    self.show_toast("Mantén Tono, Sonido, Modo u OK y gira la rueda");
                 }
             }
             (Knob::Tempo, Some(Menu::Tono)) => self.change(Item::Octava, d, out),
@@ -2332,6 +2372,28 @@ mod tests {
     }
 
     #[test]
+    fn atajos() {
+        let mut s = State::default();
+        let c = press(&mut s, Control::Pad(10));
+        assert!(c.is_empty(), "vacío: solo un aviso");
+        assert!(s.toast_text().is_some());
+        release(&mut s, Control::Pad(10));
+        s.shortcuts[1] = Some("perro.wav".into());
+        let c = press(&mut s, Control::Pad(10));
+        assert_eq!(c, [Command::PlayShortcut(1)]);
+        assert!(s.shortcut_held[1]);
+        release(&mut s, Control::Pad(10));
+        assert!(!s.shortcut_held[1]);
+        // En el taller, amarillo + atajo lo asigna.
+        press(&mut s, Control::Taller);
+        s.take_actions();
+        press(&mut s, Control::Menu(Menu::Sonido));
+        press(&mut s, Control::Shortcut(2));
+        release(&mut s, Control::Menu(Menu::Sonido));
+        assert_eq!(s.take_actions(), [Action::AssignShortcut(2)]);
+    }
+
+    #[test]
     fn taller_de_samples() {
         let mut s = State::default();
         press(&mut s, Control::Taller);
@@ -2340,9 +2402,14 @@ mod tests {
         s.sample_count = 3;
         press(&mut s, Control::Arrow(Arrow::Up));
         assert_eq!(s.take_actions(), [Action::SelectSample(2)]);
-        // La rueda elige el botón y Play destroza.
+        // La rueda sola elige sonido.
         s.handle(Event::Turn(Knob::Cursor, 1), 0.0);
+        assert_eq!(s.take_actions(), [Action::SelectSample(0)]);
+        // OK mantenido + rueda elige el botón y al soltar OK destroza.
         press(&mut s, Control::Play);
+        s.handle(Event::Turn(Knob::Cursor, 1), 0.0);
+        assert!(s.take_actions().is_empty());
+        release(&mut s, Control::Play);
         assert_eq!(s.take_actions(), [Action::Destroy(1)]);
         press(&mut s, Control::Menu(Menu::Sonido));
         release(&mut s, Control::Menu(Menu::Sonido));

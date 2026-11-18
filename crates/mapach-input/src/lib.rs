@@ -74,6 +74,8 @@ pub enum Control {
     Pad(u8),
     /// Paso 0–15 del secuenciador.
     Step(u8),
+    /// Atajo a sample 0–3 (la fila de las teclas 9–12 del mando).
+    Shortcut(u8),
 }
 
 /// Un evento de entrada.

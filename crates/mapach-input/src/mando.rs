@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use evdev::{Device, EventSummary, KeyCode};
 
-use crate::{Arrow, Control, Event, Knob, Menu};
+use crate::{Control, Event, Knob, Menu};
 
 pub const VENDOR: u16 = 0x514c;
 pub const PRODUCT: u16 = 0x8850;
@@ -103,10 +103,12 @@ impl Default for Mapping {
             (K::KEY_KP8, K::KEY_KP9, K::KEY_KP0),
             (K::KEY_KPSLASH, K::KEY_KPASTERISK, K::KEY_KPMINUS),
         ];
-        for (i, (l, r, p)) in knobs.iter().enumerate() {
+        // Comprobado con el mando: el primer código de cada perilla llega al girar a la
+        // derecha y el segundo, a la izquierda.
+        for (i, (r, l, p)) in knobs.iter().enumerate() {
             let k = i as u8;
-            codes.push((l.code(), Target::Left(k)));
             codes.push((r.code(), Target::Right(k)));
+            codes.push((l.code(), Target::Left(k)));
             codes.push((p.code(), Target::Push(k)));
         }
         Self { codes }
@@ -139,10 +141,8 @@ pub fn key_control(n: u8) -> Option<Control> {
     Some(match n {
         1..=7 => Control::Chord(n - 1),
         8 => Control::Record,
-        9 => Control::Arrow(Arrow::Left),
-        10 => Control::Arrow(Arrow::Up),
-        11 => Control::Arrow(Arrow::Down),
-        12 => Control::Arrow(Arrow::Right),
+        // 9–12 (donde estaban las flechas): atajos a samples.
+        9..=12 => Control::Shortcut(n - 9),
         13 => Control::Menu(Menu::Tono),
         14 => Control::Menu(Menu::Sonido),
         15 => Control::Menu(Menu::Modo),
@@ -341,16 +341,16 @@ mod tests {
     #[test]
     fn perillas() {
         assert_eq!(
-            translate(KeyCode::KEY_KP6, 1),
+            translate(KeyCode::KEY_KP5, 1),
             Some(Event::Turn(Knob::Volumen, 1))
         );
         // La del centro es el tempo y la de la derecha, la rueda-cursor.
         assert_eq!(
-            translate(KeyCode::KEY_KP8, 1),
+            translate(KeyCode::KEY_KP9, 1),
             Some(Event::Turn(Knob::Tempo, -1))
         );
         assert_eq!(
-            translate(KeyCode::KEY_KPASTERISK, 1),
+            translate(KeyCode::KEY_KPSLASH, 1),
             Some(Event::Turn(Knob::Cursor, 1))
         );
         // Soltar después de un clic de giro no hace nada.
@@ -362,10 +362,12 @@ mod tests {
     }
 
     #[test]
-    fn las_16_teclas_estan_mapeadas() {
+    fn teclas_con_funcion() {
         for n in 1..=16 {
             assert!(key_control(n).is_some(), "{n}");
         }
+        assert_eq!(key_control(9), Some(Control::Shortcut(0)));
+        assert_eq!(key_control(12), Some(Control::Shortcut(3)));
         assert!(key_control(17).is_none());
     }
 

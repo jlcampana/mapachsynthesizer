@@ -31,16 +31,17 @@ que es como lo hace el HiChord.
 |---|---|---|---|---|
 | **Fila 1** | Acorde **I** (rojo) | Acorde **ii** (naranja) | Acorde **iii** (amarillo) | Acorde **IV** (verde) |
 | **Fila 2** | Acorde **V** (cian) | Acorde **vi** (azul) | Acorde **vii** (morado) | ● **Grabar** |
-| **Fila 3** | **←** | **↑** | **↓** | **→** |
-| **Fila 4** | **Tono** (gris) | **Sonido** (amarillo) | **Modo** (rojo) | ▶ **Play / pausa** |
+| **Fila 3** | ⚡ Atajo 1 | ⚡ Atajo 2 | ⚡ Atajo 3 | ⚡ Atajo 4 |
+| **Fila 4** | **Tono** (gris) | **Sonido** (amarillo) | **Modo** (rojo) | **OK** (verde) |
 
-- **Flechas = joystick del HiChord.** Si las pulsas mientras mantienes un acorde, cambian su color:
-  ↑ mayor/menor · → 7ª · ↓ sus4 · ← disminuido. Dos flechas a la vez dan las diagonales:
-  ↗ 7ª dominante · ↘ 9ª · ↖ aumentado.
-- **Menús:** si mantienes Tono, Sonido o Modo, las flechas hacen lo mismo que en el HiChord.
-  - Tono: ←/→ tonalidad, ↑/↓ octava.
-  - Sonido: ←/→ sonido, ↑ efectos.
-  - Modo: ←/→ modo, ↑ BPM.
+- **Atajos (fila 3):** cada tecla dispara un sample entero, que también se graba en el looper.
+  Se configuran en el Taller: con un sonido elegido, mantén el botón amarillo y pulsa el atajo.
+  (Antes eran las flechas; su trabajo lo hace ahora la rueda grande.)
+- **OK (verde):** el botón central de la rueda, como en un iPod. En un menú entra y sale de cambiar
+  el valor; en Canciones abre o exporta; en el Taller, mantenido con la rueda, elige el destrozo y
+  al soltarlo lo aplica. Fuera de eso, sigue y para el looper y el ritmo.
+- **Menús:** si mantienes Tono, Sonido o Modo y giras la rueda grande, cambias la tonalidad, el
+  sonido o el modo.
 - **Grabar:** arma o graba la pista actual del looper. Mientras mantienes Grabar, los acordes I–vi
   (las 6 primeras teclas) eligen la pista 1–6.
 - En **modo Batería**, las 7 teclas de acorde tocan los 7 golpes del kit.
@@ -147,9 +148,12 @@ Sin modificadores, y las 3 capas iguales:
 |---|---|
 | Teclas 1–12 | `F13` … `F24` |
 | Teclas 13–16 | Teclado numérico `1` `2` `3` `4` |
-| P1 izquierda / derecha / pulsar | Num `5` / `6` / `7` |
-| P2 izquierda / derecha / pulsar | Num `8` / `9` / `0` |
-| P3 izquierda / derecha / pulsar | Num `/` / `*` / `-` |
+| P1 derecha / izquierda / pulsar | Num `5` / `6` / `7` |
+| P2 derecha / izquierda / pulsar | Num `8` / `9` / `0` |
+| P3 derecha / izquierda / pulsar | Num `/` / `*` / `-` |
+
+> Comprobado tocando: el primer código de cada perilla llega al girarla **a la derecha**. La app ya
+> lo tiene en cuenta; si algún día gira al revés, el asistente "Aprender mando" lo arregla.
 
 > **Ojo:** con Mapachsynthesizer cerrada, en Fedora/GNOME las teclas 8–11 (`F20`–`F23`) pueden silenciar el
 > micrófono o activar y desactivar el touchpad. Con Mapachsynthesizer abierta no pasa, porque la app coge el

@@ -106,6 +106,13 @@ pub enum Command {
         drum: u8,
         data: Option<std::sync::Arc<[f32]>>,
     },
+    /// Pone (o quita) el sample de un atajo (0–3).
+    SetShortcut {
+        slot: u8,
+        data: Option<std::sync::Arc<[f32]>>,
+    },
+    /// Dispara un atajo: suena su sample entero, una vez.
+    PlayShortcut(u8),
     /// Escucha un sample tal cual (en el taller). `None` para.
     Preview(Option<std::sync::Arc<[f32]>>),
     /// Copia una pista del looper en el búfer (de `looper_capacity() * 2` muestras).
@@ -132,6 +139,9 @@ pub enum Reply {
     /// Un sample que ya no se usa (se libera fuera del hilo de audio).
     FreeSample(std::sync::Arc<[f32]>),
 }
+
+/// Atajos a samples.
+pub const SHORTCUTS: usize = 4;
 
 /// Huecos de sample.
 pub const SAMPLE_SLOTS: usize = 2;
@@ -206,6 +216,9 @@ pub struct Engine {
     looper: Looper,
     fx: FxChain,
     samples: [Option<SampleSlot>; SAMPLE_SLOTS],
+    /// Atajos a samples: datos y posición (`None` = parado).
+    shortcuts: [Option<std::sync::Arc<[f32]>>; SHORTCUTS],
+    shortcut_pos: [Option<usize>; SHORTCUTS],
     /// Escucha de un sample en el taller: datos y posición.
     preview: Option<(std::sync::Arc<[f32]>, usize)>,
     bpm: f32,
@@ -232,6 +245,8 @@ impl Engine {
             looper: Looper::new(sample_rate),
             fx: FxChain::new(sample_rate),
             samples: [None, None],
+            shortcuts: Default::default(),
+            shortcut_pos: [None; SHORTCUTS],
             preview: None,
             bpm: 120.0,
             replies: [None, None, None, None],
@@ -326,6 +341,19 @@ impl Engine {
             Command::SetDrumSample { drum, data } => {
                 if let Some(old) = self.drums.set_sample(drum as usize, data) {
                     self.reply(Reply::FreeSample(old));
+                }
+            }
+            Command::SetShortcut { slot, data } => {
+                let i = slot as usize % SHORTCUTS;
+                self.shortcut_pos[i] = None;
+                if let Some(old) = std::mem::replace(&mut self.shortcuts[i], data) {
+                    self.reply(Reply::FreeSample(old));
+                }
+            }
+            Command::PlayShortcut(slot) => {
+                let i = slot as usize % SHORTCUTS;
+                if self.shortcuts[i].is_some() {
+                    self.shortcut_pos[i] = Some(0);
                 }
             }
             Command::Preview(p) => {
@@ -472,6 +500,22 @@ impl Engine {
                 );
             }
             self.drums.render(block, self.bpm);
+            // Atajos: antes de los efectos, para que se graben en el looper.
+            for i in 0..SHORTCUTS {
+                let (Some(data), Some(pos)) = (&self.shortcuts[i], &mut self.shortcut_pos[i])
+                else {
+                    continue;
+                };
+                for frame in block.chunks_exact_mut(2) {
+                    let Some(&v) = data.get(*pos) else {
+                        self.shortcut_pos[i] = None;
+                        break;
+                    };
+                    frame[0] += v * 0.5;
+                    frame[1] += v * 0.5;
+                    *pos += 1;
+                }
+            }
             if let Some((data, pos)) = &mut self.preview {
                 for frame in block.chunks_exact_mut(2) {
                     let Some(&v) = data.get(*pos) else { break };
@@ -783,6 +827,26 @@ mod tests {
         e.handle(on(60));
         let buf = render(&mut e, 0.1);
         assert!(buf.iter().all(|&s| s == 0.0));
+    }
+
+    #[test]
+    fn atajos_a_samples() {
+        let mut e = Engine::new(48_000.0);
+        // Sin sala, para que no quede cola.
+        e.handle(Command::SetReverb(0.0));
+        e.handle(Command::PlayShortcut(1));
+        render(&mut e, 0.01);
+        assert_eq!(e.peak(), 0.0, "sin sample no suena");
+        e.handle(Command::SetShortcut {
+            slot: 1,
+            data: Some(std::sync::Arc::from(vec![0.5f32; 4800])),
+        });
+        e.handle(Command::PlayShortcut(1));
+        render(&mut e, 0.05);
+        assert!(e.peak() > 0.01);
+        render(&mut e, 0.2);
+        render(&mut e, 0.05);
+        assert_eq!(e.peak(), 0.0, "se acaba solo");
     }
 
     #[test]

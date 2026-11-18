@@ -56,6 +56,8 @@ pub struct Ajustes {
     pub estrellas: u32,
     /// Colores por nota en vez de por tecla.
     pub colores_por_nota: bool,
+    /// Samples de los atajos ("" = vacío).
+    pub atajos: Vec<String>,
 }
 
 const DIRS: [Direction; 8] = [
@@ -126,6 +128,11 @@ impl Ajustes {
                 .collect(),
             estrellas: s.stars,
             colores_por_nota: s.note_colors,
+            atajos: s
+                .shortcuts
+                .iter()
+                .map(|g| g.clone().unwrap_or_default())
+                .collect(),
         }
     }
 
@@ -166,6 +173,9 @@ impl Ajustes {
             }
         }
         s.max_db = self.volumen_maximo.clamp(-24.0, -3.0);
+        for (dst, src) in s.shortcuts.iter_mut().zip(&self.atajos) {
+            *dst = (!src.is_empty()).then(|| src.clone());
+        }
         for (dst, src) in s.drum_samples.iter_mut().zip(&self.golpes) {
             *dst = (!src.is_empty()).then(|| src.clone());
         }
