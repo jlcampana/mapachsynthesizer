@@ -44,6 +44,8 @@ pub struct Ajustes {
     pub sala: f32,
     /// Sample que se usa como instrumento ("" = ninguno).
     pub mi_sample: String,
+    /// Presets F1–F4.
+    pub presets: Vec<Option<Ajustes>>,
 }
 
 impl Default for Ajustes {
@@ -85,6 +87,11 @@ impl Ajustes {
             cantidad: s.effect_amount,
             sala: s.reverb,
             mi_sample: s.instrument.clone().unwrap_or_default(),
+            presets: s
+                .presets
+                .iter()
+                .map(|p| p.as_ref().map(|b| (**b).clone()))
+                .collect(),
         }
     }
 
@@ -110,6 +117,12 @@ impl Ajustes {
         s.kit = self.kit % KITS.len();
         s.drum_style = self.ritmo % (STYLES.len() + 1);
         s.drum_variation = self.variacion % VARIATIONS.len();
+        // Los presets solo se leen al arrancar (dentro de un preset vienen vacíos).
+        if !self.presets.is_empty() {
+            for (dst, src) in s.presets.iter_mut().zip(&self.presets) {
+                *dst = src.clone().map(Box::new);
+            }
+        }
         s.effect = Effect::ALL[self.efecto % Effect::ALL.len()];
         s.effect_amount = self.cantidad.clamp(0.0, 1.0);
         s.reverb = self.sala.clamp(0.0, 1.0);

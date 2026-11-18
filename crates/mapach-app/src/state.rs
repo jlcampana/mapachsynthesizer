@@ -274,6 +274,10 @@ pub struct State {
     pub song_focus: SongFocus,
     /// Canciones en la lista (lo dice la app al leer la carpeta).
     pub song_count: usize,
+    /// Presets rápidos F1–F4 (como P1–P4 del HiChord).
+    pub presets: [Option<Box<crate::ajustes::Ajustes>>; 4],
+    /// Preset que se mantiene pulsado y desde cuándo (mantener = guardar).
+    pub preset_hold: Option<(usize, f64)>,
     /// Ruta del sample que se usa como instrumento ("Mi sample").
     pub instrument: Option<String>,
     /// Samples en la biblioteca del taller.
@@ -349,6 +353,8 @@ impl Default for State {
             screen: Screen::Tocar,
             song_focus: SongFocus::Card(0),
             song_count: 0,
+            presets: Default::default(),
+            preset_hold: None,
             instrument: None,
             sample_count: 0,
             sample_sel: 0,
@@ -593,7 +599,40 @@ impl State {
             self.track_hold = None;
             self.clear_track(t, &mut out);
         }
+        if let Some((p, since)) = self.preset_hold
+            && now - since >= Self::HOLD_TO_CLEAR
+        {
+            // Mantener: guardar el preset.
+            self.preset_hold = None;
+            let mut a = crate::ajustes::Ajustes::from_state(self);
+            a.presets.clear();
+            self.presets[p] = Some(Box::new(a));
+            self.show_toast(format!("💾 Guardado en F{}", p + 1));
+        }
         out
+    }
+
+    /// Carga el preset `p` (si hay algo guardado).
+    fn load_preset(&mut self, p: usize, out: &mut Vec<Command>) {
+        let Some(a) = self.presets[p].clone() else {
+            self.show_toast(format!("F{} está vacío: mantenlo para guardar", p + 1));
+            return;
+        };
+        self.stop_chord(out);
+        self.current = None;
+        self.held.clear();
+        for (_, n) in self.melody.drain(..) {
+            out.push(Command::NoteOff {
+                note: n.clamp(0, 127) as u8,
+            });
+        }
+        out.push(Command::StopChord);
+        let was_drums = self.drums_playing;
+        a.apply(self);
+        out.extend(self.initial_commands());
+        let drums = self.play_mode.is_drums() && (was_drums || self.play_mode != PlayMode::Bateria);
+        self.set_drums_playing(drums, out);
+        self.show_toast(format!("⭐ F{}", p + 1));
     }
 
     fn clear_track(&mut self, t: usize, out: &mut Vec<Command>) {
@@ -690,6 +729,7 @@ impl State {
 
     /// Suelta todo lo pulsado (al perder el foco o abrir el modo papá).
     pub fn release_all(&mut self) {
+        self.preset_hold = None;
         self.track_hold = None;
         self.record_held = None;
         self.held.clear();
@@ -857,6 +897,9 @@ impl State {
                     self.record_held = Some(false);
                 }
             }
+            Control::Preset(p) if (p as usize) < 4 => {
+                self.preset_hold = Some((p as usize, self.now));
+            }
             Control::Track(t) if (t as usize) < TRACKS => {
                 self.track = t as usize;
                 self.track_hold = Some((self.track, self.now));
@@ -950,6 +993,13 @@ impl State {
             Control::Track(t) => {
                 if self.track_hold.is_some_and(|(h, _)| h == t as usize) {
                     self.track_hold = None;
+                }
+            }
+            Control::Preset(p) => {
+                // Soltar antes de tiempo: cargar.
+                if self.preset_hold.is_some_and(|(h, _)| h == p as usize) {
+                    self.preset_hold = None;
+                    self.load_preset(p as usize, out);
                 }
             }
             Control::Menu(m) => {
@@ -1729,6 +1779,32 @@ mod tests {
         // Sigue en la pantalla; F5 sale.
         press(&mut s, Control::Canciones);
         assert_eq!(s.screen, Screen::Tocar);
+    }
+
+    #[test]
+    fn presets_mantener_guarda_y_pulsar_carga() {
+        let mut s = State::default();
+        s.sync(LooperStatus::default(), 0.0);
+        s.change(Item::Sonido, 3, &mut Vec::new());
+        s.key.transpose(5);
+        // Mantener F2.
+        press(&mut s, Control::Preset(1));
+        s.sync(LooperStatus::default(), 2.0);
+        release(&mut s, Control::Preset(1));
+        assert!(s.presets[1].is_some());
+        // Cambiar cosas y volver con F2.
+        s.change(Item::Sonido, 1, &mut Vec::new());
+        s.key.transpose(2);
+        s.sync(LooperStatus::default(), 3.0);
+        press(&mut s, Control::Preset(1));
+        let c = release(&mut s, Control::Preset(1));
+        assert_eq!(s.sound, 3);
+        assert_eq!(s.key.tonic, 5);
+        assert!(c.iter().any(|c| matches!(c, Command::SetPatch(_))));
+        // Un preset vacío no cambia nada.
+        press(&mut s, Control::Preset(3));
+        let c = release(&mut s, Control::Preset(3));
+        assert!(c.is_empty());
     }
 
     #[test]
