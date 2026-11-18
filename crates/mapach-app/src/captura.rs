@@ -196,6 +196,13 @@ impl Captura {
                 v.extend([r(Menu(M::Tono)), p(Chord(0))]);
                 v
             }
+            // Vista de loops abierta con la rueda, grabando la pista 1 y pidiendo borrarla.
+            19 => vec![
+                p(KnobPress(Knob::Cursor)),
+                p(Record),
+                r(Record),
+                p(KnobPress(Knob::Tempo)),
+            ],
             _ => vec![],
         }
     }

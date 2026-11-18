@@ -50,15 +50,22 @@ Al cambiar de modo sale unos segundos una frase corta que lo explica, para leerl
 
 ## Looper
 
-`Espacio` (Grabar en el mando) graba la pista elegida y la para. La primera grabación marca la
-duración (si suena un ritmo, se redondea a compases). `1`–`6` eligen pista (en el mando: Grabar +
-acorde 1–6), mantener una pista 1,5 s la borra y `Retroceso` deshace la última grabación. `Intro`
-para y sigue.
+| Mando | Teclado | Qué hace |
+|---|---|---|
+| Pulsar la rueda grande | — | Abre y cierra la vista de loops |
+| Girar la rueda (con la vista abierta) | `1`–`6` | Elige pista |
+| Grabar ● | `Espacio` | Empieza y para la grabación de la pista elegida |
+| OK | `Intro` | Sigue o para todos los loops |
+| Pulsar la perilla izquierda (vista abierta) | — | Silencia o devuelve el sonido de la pista elegida |
+| Pulsar la perilla central (vista abierta), dos veces | Mantener `1`–`6` 1,5 s | Borra la pista elegida |
+| — | `Retroceso` | Deshace la última grabación |
 
-**Silenciar un loop:** elige la pista con OK + rueda (o `1`–`6`) y, mientras se ve el looper,
-pulsa la perilla del volumen: esa pista se calla (o vuelve a sonar). Si no se ve el looper, pulsar
-el volumen silencia todo, como siempre. Al abrir la app vuelve la última canción con sus loops,
-en pausa; para empezar de cero, Mis canciones › Nueva.
+La primera grabación marca la duración de la vuelta (si suena un ritmo, se redondea a compases); las
+demás graban una vuelta y paran solas. Para borrar hay que pulsar dos veces la perilla central: la
+primera la pista se pone en rojo con "¿Borrar?", y la segunda (antes de 2 s) la borra.
+
+Al abrir la app vuelve la última canción con sus loops, en pausa; para empezar de cero, Mis
+canciones › Nueva.
 
 ## Canciones (`F5`)
 

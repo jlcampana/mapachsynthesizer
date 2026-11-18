@@ -431,12 +431,12 @@ fn looper_view(c: &Canvas, st: &State, extra: &Extra) {
     };
     c.text(176.0, 112.0, Align2::LEFT_CENTER, title, 18.0, MENU_ROJO);
     c.text(
-        690.0,
-        112.0,
-        Align2::RIGHT_CENTER,
-        "OK + rueda: pista · pulsa volumen: 🔇 · ● grabar",
-        13.0,
-        NEON_CIAN.gamma_multiply(0.7),
+        430.0,
+        350.0,
+        Align2::CENTER_CENTER,
+        "Rueda: pista · Grabar: grabar o parar · Pulsar: izquierda silencia, centro borra, rueda cierra",
+        11.0,
+        TEXTO_2,
     );
     for (i, &col) in ACORDES.iter().enumerate().take(TRACKS) {
         let y = 140.0 + i as f32 * 35.0;
@@ -526,6 +526,22 @@ fn looper_view(c: &Canvas, st: &State, extra: &Extra) {
                     NEON_CIAN.gamma_multiply(0.6),
                 );
             }
+        }
+        // ¿Borrar? (perilla central pulsada una vez).
+        if let Some((t, at)) = st.delete_armed
+            && t == i
+            && extra.time - at < 2.0
+        {
+            c.rect_stroke(x0 - 2.0, y - 15.0, w + 4.0, 30.0, 9.0, 2.5, MENU_ROJO);
+            c.rect(x0 + w / 2.0 - 120.0, y - 11.0, 240.0, 22.0, 6.0, MENU_ROJO);
+            c.text(
+                x0 + w / 2.0,
+                y,
+                Align2::CENTER_CENTER,
+                "🗑 ¿Borrar? Pulsa otra vez",
+                13.0,
+                BLANCO,
+            );
         }
         // Barra de "mantén para borrar".
         if let Some((t, since)) = st.track_hold
@@ -861,14 +877,20 @@ fn mando_panel(c: &Canvas, st: &State) {
     };
     let loop_mute = st.looper_visible() && st.looper.has(st.track);
     let vol_label = if loop_mute {
-        format!("🔇 pista {}", st.track + 1)
+        "silenciar".to_string()
     } else if st.muted {
         "silencio".into()
     } else {
         "volumen".into()
     };
     knob(770.0, 12.0, &vol_label, loop_mute);
-    knob(818.0, 12.0, &format!("{:.0} bpm", st.bpm), false);
+    let loop_delete = st.looper_visible() && st.looper.has(st.track);
+    let tempo_label = if loop_delete {
+        "borrar".to_string()
+    } else {
+        format!("{:.0} bpm", st.bpm)
+    };
+    knob(818.0, 12.0, &tempo_label, loop_delete);
     knob(890.0, 22.0, st.cursor_role(), true);
 
     // Teclas: acordes, Grabar, los 4 atajos a samples y los botones de abajo.

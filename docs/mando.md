@@ -42,17 +42,16 @@ que es como lo hace el HiChord.
   al soltarlo lo aplica. Fuera de eso, sigue y para el looper y el ritmo.
 - **Menús:** si mantienes Tono, Sonido o Modo y giras la rueda grande, cambias la tonalidad, el
   sonido o el modo.
-- **Grabar:** arma o graba la pista actual del looper. Mientras mantienes Grabar, los acordes I–vi
-  (las 6 primeras teclas) eligen la pista 1–6.
+- **Grabar:** empieza y para la grabación de la pista elegida del looper.
 - En **modo Batería**, las 7 teclas de acorde tocan los 7 golpes del kit.
 
 ### Perillas
 
 | Perilla | Girar | Pulsar |
 |---|---|---|
-| **Izquierda · Volumen** | Volumen. Con Tono, Sonido o Modo pulsado: ataque, release o brillo | Silencio. Con el looper a la vista: silencia la pista elegida |
-| **Centro · Tempo** | BPM (40–300). Con Tono pulsado: octava; con Sonido: cantidad de efecto; con Modo: patrón o ritmo | Tap tempo (si el mando lo manda) |
-| **Derecha, la grande · Rueda-cursor** | Ver abajo | No hace falta: **Play** hace de botón central |
+| **Izquierda · Volumen** | Volumen. Con Tono, Sonido o Modo pulsado: ataque, release o brillo | Silencio. Con la vista de loops: silencia la pista elegida |
+| **Centro · Tempo** | BPM (40–300). Con Tono pulsado: octava; con Sonido: cantidad de efecto; con Modo: patrón o ritmo | Tap tempo. Con la vista de loops: borra la pista elegida (dos pulsaciones) |
+| **Derecha, la grande · Rueda-cursor** | Ver abajo | Abre y cierra la vista de loops |
 
 La **rueda grande funciona como la de un iPod**:
 
@@ -63,6 +62,7 @@ La **rueda grande funciona como la de un iPod**:
 - **Con un acorde pulsado**: recorre sus colores (normal → mayor/menor → 7ª → 7ª dominante → 9ª →
   sus4 → disminuido → aumentado).
 - **En Canciones y en el Taller**: mueve la selección; Play elige (abrir, exportar o destrozar).
+- **Con la vista de loops abierta**: elige la pista.
 - **En el secuenciador**: elige el instrumento.
 
 Play actúa al soltarlo, para poder combinarlo con la rueda sin que arranque el looper.

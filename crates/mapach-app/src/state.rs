@@ -368,6 +368,10 @@ pub struct State {
     /// Estado del looper que llega del motor.
     pub looper: LooperStatus,
     pub track_volume: [f32; TRACKS],
+    /// Vista de loops abierta (se abre y se cierra pulsando la rueda grande).
+    pub looper_open: bool,
+    /// Borrar pedido: pista y cuándo (hay que pulsar otra vez antes de 2 s).
+    pub delete_armed: Option<(usize, f64)>,
     /// Hasta cuándo se ve la pantalla del looper.
     pub looper_shown_until: f64,
     /// Pista que se mantiene pulsada y desde cuándo (mantener 1,5 s = borrar).
@@ -454,6 +458,8 @@ impl Default for State {
             looper: LooperStatus::default(),
             track_volume: [1.0; TRACKS],
             looper_shown_until: 0.0,
+            looper_open: false,
+            delete_armed: None,
             track_hold: None,
             record_held: None,
             last_recorded: None,
@@ -795,7 +801,8 @@ impl State {
 
     /// ¿Se ve la pantalla del looper?
     pub fn looper_visible(&self) -> bool {
-        self.looper.recording.is_some()
+        self.looper_open
+            || self.looper.recording.is_some()
             || self.now < self.looper_shown_until
             || self.track_hold.is_some()
             || self.record_held.is_some()
@@ -916,7 +923,7 @@ impl State {
             Some(Menu::Modo) => return "modo",
             None => {}
         }
-        if self.play_held.is_some() {
+        if self.play_held.is_some() || (self.looper_open && self.open_menu.is_none()) {
             "pista"
         } else if self.open_menu.is_some() {
             if self.menu_edit { "cambiar" } else { "elegir" }
@@ -1055,12 +1062,6 @@ impl State {
             }
             Control::Canciones => self.open_songs(),
             Control::Taller => self.open_taller(),
-            // Grabar + tecla de acorde 1–6 (en el mando): elegir pista.
-            Control::Chord(b) if self.record_held.is_some() && (b as usize) < TRACKS => {
-                self.record_held = Some(true);
-                self.track = b as usize;
-                self.looper_shown_until = self.now + LOOPER_SHOWN;
-            }
             Control::Chord(b) | Control::ChordHigh(b) if (b as usize) < BUTTONS => {
                 let high = matches!(c, Control::ChordHigh(_));
                 match self.play_mode {
@@ -1133,18 +1134,14 @@ impl State {
                 self.menu_used = false;
             }
             Control::Record => {
-                // Espacio con un menú pulsado: 🎲 aleatorio. Con un menú abierto: cerrar.
                 if let Some(m) = self.menu_held() {
+                    // Grabar con un menú pulsado: 🎲 aleatorio.
                     self.menu_used = true;
                     self.randomize(m, out);
-                } else if self.open_menu.is_some() {
-                    self.open_menu = None;
-                } else if self.looper.recording.is_some() {
-                    // Parar enseguida.
-                    self.record(out);
                 } else {
-                    // Empezar al soltar (por si mientras tanto se elige pista).
-                    self.record_held = Some(false);
+                    // Empieza o para la grabación de la pista elegida, enseguida.
+                    self.record_held = Some(true);
+                    self.record(out);
                 }
             }
             Control::Preset(p) if (p as usize) < 4 => {
@@ -1187,10 +1184,6 @@ impl State {
                 } else if self.open_menu.is_some() {
                     // Entrar o salir de cambiar el valor de la opción.
                     self.menu_edit = !self.menu_edit;
-                } else if self.play_mode == PlayMode::Secuencia {
-                    // Salir del secuenciador: el ritmo sigue como "Mi ritmo".
-                    self.drum_style = STYLES.len();
-                    self.set_play_mode(PlayMode::Ritmos, out);
                 } else if let Some(sounding) = &self.current {
                     // Con un acorde pulsado: fijar su color en esa tecla (o soltarlo).
                     let b = sounding.button as usize;
@@ -1204,6 +1197,29 @@ impl State {
                     };
                     self.knob_color = 0;
                     self.revoice(out);
+                } else {
+                    // Abrir o cerrar la vista de loops.
+                    self.looper_open = !self.looper_open;
+                    self.looper_shown_until = 0.0;
+                    self.delete_armed = None;
+                }
+            }
+            // Pulsar la perilla central con la vista de loops: borrar la pista elegida (pulsando
+            // dos veces, para no borrar sin querer).
+            Control::KnobPress(Knob::Tempo)
+                if self.looper_visible() && self.looper.has(self.track) =>
+            {
+                let t = self.track;
+                match self.delete_armed {
+                    Some((d, at)) if d == t && self.now - at < 2.0 => {
+                        self.delete_armed = None;
+                        self.clear_track(t, out);
+                        self.show_toast(format!("🗑 Pista {} borrada", t + 1));
+                    }
+                    _ => {
+                        // El aviso sale en la propia pista.
+                        self.delete_armed = Some((t, self.now));
+                    }
                 }
             }
             Control::KnobPress(Knob::Tempo) | Control::Tap => {
@@ -1284,11 +1300,7 @@ impl State {
                     self.revoice(out);
                 }
             }
-            Control::Record => {
-                if self.record_held.take() == Some(false) {
-                    self.record(out);
-                }
-            }
+            Control::Record => self.record_held = None,
             Control::Play => {
                 if self.play_held.take() == Some(false) {
                     self.play_action(out);
@@ -1381,10 +1393,14 @@ impl State {
                         self.open_menu = Some(OpenMenu { item, ..open });
                     }
                 } else if let Some(used) = &mut self.play_held {
-                    // Play + rueda: elegir pista del looper.
+                    // OK + rueda: elegir pista del looper.
                     *used = true;
                     self.track = wrap(self.track, d, TRACKS);
                     self.looper_shown_until = self.now + LOOPER_SHOWN;
+                } else if self.looper_open {
+                    // Con la vista de loops abierta, la rueda elige pista.
+                    self.track = wrap(self.track, d, TRACKS);
+                    self.delete_armed = None;
                 } else if self.play_mode == PlayMode::Secuencia {
                     self.seq_row = wrap(self.seq_row, d, SEQ_ROWS);
                 } else if self.current.is_some() {
@@ -2103,8 +2119,9 @@ mod tests {
         // Volver a pulsar apaga.
         press(&mut s, Control::Track(0));
         assert_eq!(s.seq_pattern[0], 0);
-        // Pulsar la perilla mágica sale a Ritmos con "Mi ritmo".
-        press(&mut s, Control::KnobPress(Knob::Cursor));
+        // La fila "Salir" (con la rueda) sale a Ritmos con "Mi ritmo".
+        s.seq_row = SEQ_EXIT;
+        press(&mut s, Control::Pad(1));
         assert_eq!(s.play_mode, PlayMode::Ritmos);
         assert_eq!(s.drum_pattern(), s.seq_pattern);
         assert!(s.drums_playing);
@@ -2135,10 +2152,10 @@ mod tests {
     fn looper_grabar_parar_y_siguiente_pista() {
         let mut s = State::default();
         s.sync(LooperStatus::default(), 1.0);
-        press(&mut s, Control::Record);
-        assert!(s.looper_visible());
-        let c = release(&mut s, Control::Record);
+        let c = press(&mut s, Control::Record);
         assert_eq!(c, [Command::LoopRecord(0)]);
+        assert!(s.looper_visible());
+        release(&mut s, Control::Record);
         assert_eq!(s.looper.recording, Some(0));
         // El motor dice que graba la 0.
         let rec = LooperStatus {
@@ -2207,16 +2224,45 @@ mod tests {
     }
 
     #[test]
-    fn grabar_mas_acorde_elige_pista_en_el_mando() {
+    fn vista_de_loops_y_borrar_con_la_perilla_central() {
         let mut s = State::default();
-        press(&mut s, Control::Pad(8));
-        let c = press(&mut s, Control::Pad(3));
-        assert!(c.is_empty());
-        assert_eq!(s.track, 2);
-        release(&mut s, Control::Pad(3));
-        // Al soltar Grabar no empieza a grabar, porque se ha elegido pista.
-        let c = release(&mut s, Control::Pad(8));
-        assert!(c.is_empty());
+        let lp = LooperStatus {
+            used: 0b10,
+            playing: true,
+            length: 2.0,
+            ..Default::default()
+        };
+        s.sync(lp, 0.0);
+        // Pulsar la rueda abre la vista; girarla elige pista.
+        press(&mut s, Control::KnobPress(Knob::Cursor));
+        assert!(s.looper_open && s.looper_visible());
+        s.handle(Event::Turn(Knob::Cursor, 1), 0.0);
+        assert_eq!(s.track, 1);
+        // La perilla central: la primera vez avisa, la segunda borra.
+        assert!(press(&mut s, Control::KnobPress(Knob::Tempo)).is_empty());
+        let c = press(&mut s, Control::KnobPress(Knob::Tempo));
+        assert_eq!(c, [Command::LoopClear(1)]);
+        // Con la vista cerrada, la perilla central vuelve a ser tap tempo.
+        press(&mut s, Control::KnobPress(Knob::Cursor));
+        assert!(!s.looper_open);
+        s.sync(lp, 10.0);
+        let c = press(&mut s, Control::KnobPress(Knob::Tempo));
+        assert!(matches!(c[0], Command::SetBpm(_)));
+    }
+
+    #[test]
+    fn el_aviso_de_borrar_caduca() {
+        let mut s = State::default();
+        let lp = LooperStatus {
+            used: 1,
+            length: 2.0,
+            ..Default::default()
+        };
+        s.sync(lp, 0.0);
+        press(&mut s, Control::KnobPress(Knob::Cursor));
+        press(&mut s, Control::KnobPress(Knob::Tempo));
+        s.sync(lp, 3.0);
+        assert!(press(&mut s, Control::KnobPress(Knob::Tempo)).is_empty());
     }
 
     #[test]
