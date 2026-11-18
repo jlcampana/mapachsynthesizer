@@ -127,10 +127,10 @@ impl<S: Serialize + DeserializeOwned + Default> Song<S> {
         let text = std::fs::read_to_string(dir.join("cancion.ron"))
             .with_context(|| format!("no se pudo leer {}", dir.display()))?;
         let mut song: Song<S> = ron::from_str(&text)?;
-        for i in 0..TRACKS {
+        for (i, slot) in song.pistas.iter_mut().enumerate() {
             let path = dir.join("pistas").join(format!("{}.wav", i + 1));
             if path.exists() {
-                song.pistas[i] = Some(read_wav(&path)?);
+                *slot = Some(read_wav(&path)?);
             }
         }
         Ok(song)
