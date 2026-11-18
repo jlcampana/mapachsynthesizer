@@ -37,7 +37,10 @@ pub enum Param {
 }
 
 /// Órdenes que la interfaz manda al motor por el ring buffer.
-#[derive(Debug, Clone, Copy, PartialEq)]
+///
+/// Los búferes van en `Box`: los reserva la interfaz y el motor los devuelve en una
+/// [`Reply`], así nunca se reserva ni se libera memoria en el hilo de audio.
+#[derive(Debug, Clone, PartialEq)]
 pub enum Command {
     /// Empieza a sonar una nota MIDI. `velocity` de 0 a 1.
     NoteOn {
@@ -84,6 +87,27 @@ pub enum Command {
     LoopClear(u8),
     LoopMute(u8, bool),
     LoopVolume(u8, f32),
+    /// Copia una pista del looper en el búfer (de `looper_capacity() * 2` muestras).
+    LoopCopy {
+        track: u8,
+        buf: Box<[f32]>,
+    },
+    /// Mete en el looper una pista cargada (búfer de `looper_capacity() * 2` muestras).
+    LoopLoad {
+        track: u8,
+        buf: Box<[f32]>,
+        length: usize,
+        used: bool,
+    },
+}
+
+/// Respuestas del motor a la interfaz.
+#[derive(Debug)]
+pub enum Reply {
+    /// Una pista copiada.
+    Track(looper::TrackCopy),
+    /// Un búfer que ya no se usa: hay que liberarlo fuera del hilo de audio.
+    Free(Box<[f32]>),
 }
 
 impl Command {
@@ -155,6 +179,8 @@ pub struct Engine {
     drums: DrumMachine,
     looper: Looper,
     bpm: f32,
+    /// Respuestas pendientes (como mucho unas pocas: no reserva en el hilo de audio).
+    replies: [Option<Reply>; 4],
     /// Contador para saber qué voz es la más vieja.
     clock: u64,
     peak: f32,
@@ -175,6 +201,7 @@ impl Engine {
             drums: DrumMachine::new(sample_rate),
             looper: Looper::new(sample_rate),
             bpm: 120.0,
+            replies: [None, None, None, None],
             clock: 0,
             peak: 0.0,
         }
@@ -253,6 +280,21 @@ impl Engine {
             Command::LoopClear(t) => self.looper.clear(t as usize),
             Command::LoopMute(t, m) => self.looper.set_muted(t as usize, m),
             Command::LoopVolume(t, v) => self.looper.set_volume(t as usize, v),
+            Command::LoopCopy { track, buf } => {
+                if let Some(back) = self.looper.request_copy(track as usize, buf) {
+                    self.reply(Reply::Free(back));
+                }
+            }
+            Command::LoopLoad {
+                track,
+                buf,
+                length,
+                used,
+            } => {
+                let old = self.looper.load_track(track as usize, buf, length, used);
+                self.looper.reset_if_empty();
+                self.reply(Reply::Free(old));
+            }
             Command::SetPatch(p) => {
                 self.patch = p;
                 self.env = p.env;
@@ -313,6 +355,26 @@ impl Engine {
     /// Paso de la caja de ritmos que suena, si está en marcha.
     pub fn drum_step(&self) -> Option<usize> {
         self.drums.step()
+    }
+
+    fn reply(&mut self, r: Reply) {
+        if let Some(slot) = self.replies.iter_mut().find(|s| s.is_none()) {
+            *slot = Some(r);
+        }
+        // Si no cabe (no debería pasar), se pierde y se libera aquí: es un caso de error.
+    }
+
+    /// Saca una respuesta pendiente.
+    pub fn take_reply(&mut self) -> Option<Reply> {
+        if let Some(c) = self.looper.poll_copy() {
+            self.reply(Reply::Track(c));
+        }
+        self.replies.iter_mut().find_map(|s| s.take())
+    }
+
+    /// Frames que caben en una pista del looper.
+    pub fn looper_capacity(&self) -> usize {
+        self.looper.capacity()
     }
 
     pub fn looper_status(&self) -> LooperStatus {
@@ -509,6 +571,31 @@ mod tests {
         let buf = render(&mut e, 0.3);
         assert!(e.peak() > 0.02, "pico {}", e.peak());
         assert!(buf.iter().any(|s| s.abs() > 0.02));
+    }
+
+    #[test]
+    fn sacar_una_pista_del_motor() {
+        let mut e = Engine::new(48_000.0);
+        e.handle(Command::LoopRecord(0));
+        e.handle(on(60));
+        render(&mut e, 0.5);
+        e.handle(Command::LoopRecord(0));
+        let cap = e.looper_capacity();
+        e.handle(Command::LoopCopy {
+            track: 0,
+            buf: vec![0.0; cap * 2].into_boxed_slice(),
+        });
+        let mut got = None;
+        for _ in 0..100 {
+            render(&mut e, 0.01);
+            if let Some(Reply::Track(t)) = e.take_reply() {
+                got = Some(t);
+                break;
+            }
+        }
+        let t = got.expect("la copia no llegó");
+        assert_eq!(t.frames, 24_000);
+        assert!(t.buf[..48_000].iter().any(|s| s.abs() > 0.01));
     }
 
     #[test]

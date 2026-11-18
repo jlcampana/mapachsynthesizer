@@ -66,6 +66,26 @@ impl LooperStatus {
     }
 }
 
+/// Frames que se copian en cada bloque al sacar o meter una pista (unos 0,4 MB).
+const COPY_CHUNK: usize = 48_000;
+
+/// Copia de una pista hacia fuera (para guardar o exportar), hecha poco a poco.
+struct CopyJob {
+    track: usize,
+    buf: Box<[f32]>,
+    done: usize,
+    frames: usize,
+}
+
+/// Pista que sale del looper.
+#[derive(Debug)]
+pub struct TrackCopy {
+    pub track: usize,
+    /// Audio estéreo intercalado; solo valen los primeros `frames` frames.
+    pub buf: Box<[f32]>,
+    pub frames: usize,
+}
+
 pub struct Looper {
     sample_rate: f32,
     /// Audio estéreo intercalado de cada pista.
@@ -79,6 +99,7 @@ pub struct Looper {
     pos: usize,
     playing: bool,
     rec: Option<Rec>,
+    copy: Option<CopyJob>,
 }
 
 impl Looper {
@@ -96,6 +117,86 @@ impl Looper {
             pos: 0,
             playing: false,
             rec: None,
+            copy: None,
+        }
+    }
+
+    /// Frames que caben en una pista.
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    /// Pide una copia de la pista en `buf` (lo reserva la interfaz). Se completa poco a poco
+    /// en [`Self::poll_copy`]. Si ya había una copia en marcha, se devuelve `buf` sin usar.
+    pub fn request_copy(&mut self, track: usize, buf: Box<[f32]>) -> Option<Box<[f32]>> {
+        if self.copy.is_some() {
+            return Some(buf);
+        }
+        let frames = if self.used[track % TRACKS] {
+            self.length.min(buf.len() / 2)
+        } else {
+            0
+        };
+        self.copy = Some(CopyJob {
+            track: track % TRACKS,
+            buf,
+            done: 0,
+            frames,
+        });
+        None
+    }
+
+    /// Avanza la copia en marcha; cuando termina, la devuelve.
+    pub fn poll_copy(&mut self) -> Option<TrackCopy> {
+        let job = self.copy.as_mut()?;
+        let end = (job.done + COPY_CHUNK).min(job.frames);
+        let src = &self.tracks[job.track][job.done * 2..end * 2];
+        job.buf[job.done * 2..end * 2].copy_from_slice(src);
+        job.done = end;
+        if job.done >= job.frames {
+            let job = self.copy.take()?;
+            return Some(TrackCopy {
+                track: job.track,
+                buf: job.buf,
+                frames: job.frames,
+            });
+        }
+        None
+    }
+
+    /// Mete una pista cargada de una canción, cambiando su búfer por `buf` (que debe tener la
+    /// misma capacidad). `length`: frames de la vuelta. Devuelve el búfer viejo para que se
+    /// libere fuera del hilo de audio.
+    pub fn load_track(
+        &mut self,
+        track: usize,
+        buf: Box<[f32]>,
+        length: usize,
+        used: bool,
+    ) -> Box<[f32]> {
+        let t = track % TRACKS;
+        if buf.len() != self.capacity * 2 {
+            return buf;
+        }
+        if self.rec.map(|r| r.track) == Some(t) {
+            self.rec = None;
+        }
+        let mut v: Vec<f32> = buf.into_vec();
+        std::mem::swap(&mut self.tracks[t], &mut v);
+        self.used[t] = used;
+        if length > 0 {
+            self.length = length.min(self.capacity);
+            self.pos %= self.length;
+        }
+        v.into_boxed_slice()
+    }
+
+    /// Olvida la duración de la vuelta si no queda ninguna pista (tras cargar una canción vacía).
+    pub fn reset_if_empty(&mut self) {
+        if !self.used.iter().any(|&u| u) {
+            self.length = 0;
+            self.pos = 0;
+            self.playing = false;
         }
     }
 
@@ -322,6 +423,35 @@ mod tests {
         let st = l.status();
         assert_eq!(st.recording, None);
         assert!((st.length - MAX_SECONDS).abs() < 1e-3);
+    }
+
+    #[test]
+    fn copiar_y_cargar_pistas() {
+        let mut l = Looper::new(SR);
+        l.toggle_record(0, None);
+        feed(&mut l, 1200, 0.5, None);
+        l.toggle_record(0, None);
+        let cap = l.capacity();
+        assert!(
+            l.request_copy(0, vec![0.0; cap * 2].into_boxed_slice())
+                .is_none()
+        );
+        let copy = loop {
+            if let Some(c) = l.poll_copy() {
+                break c;
+            }
+        };
+        assert_eq!(copy.frames, 1200);
+        assert!(copy.buf[..2400].iter().all(|&s| s == 0.5));
+
+        // Cargarla en otro looper.
+        let mut m = Looper::new(SR);
+        let old = m.load_track(2, copy.buf, 1200, true);
+        assert_eq!(old.len(), cap * 2);
+        m.set_playing(true);
+        assert!(m.status().has(2));
+        let out = feed(&mut m, 5, 0.0, None);
+        assert!(out.iter().all(|&s| (s - 0.5).abs() < 1e-6));
     }
 
     #[test]

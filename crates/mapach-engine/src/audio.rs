@@ -11,7 +11,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{BufferSize, FromSample, SampleFormat, SizedSample, StreamConfig};
 
 use crate::looper::LooperStatus;
-use crate::{Command, Engine};
+use crate::{Command, Engine, Reply};
 
 /// Tamaño de bloque pedido a la tarjeta: 256 muestras a 48 kHz ≈ 5,3 ms.
 pub const PREFERRED_BUFFER: u32 = 256;
@@ -40,6 +40,10 @@ pub struct AudioStats {
 pub struct AudioOutput {
     _stream: cpal::Stream,
     pub commands: rtrb::Producer<Command>,
+    /// Respuestas del motor (pistas copiadas, búferes para liberar).
+    pub replies: rtrb::Consumer<Reply>,
+    /// Frames que caben en una pista del looper.
+    pub looper_capacity: usize,
     pub stats: Arc<AudioStats>,
     pub sample_rate: u32,
     pub channels: u16,
@@ -51,6 +55,11 @@ impl AudioOutput {
     /// Manda una orden al motor. Si la cola está llena, la orden se pierde (no bloquea nunca).
     pub fn send(&mut self, cmd: Command) {
         let _ = self.commands.push(cmd);
+    }
+
+    /// Saca una respuesta del motor, si hay.
+    pub fn reply(&mut self) -> Option<Reply> {
+        self.replies.pop().ok()
     }
 
     /// Latencia de salida estimada en milisegundos.
@@ -105,38 +114,37 @@ pub fn start() -> Result<AudioOutput> {
     // Primero probamos con un bloque pequeño; si la tarjeta no quiere, usamos el de serie.
     config.buffer_size = BufferSize::Fixed(PREFERRED_BUFFER);
     match build(&device, &config, format) {
-        Ok((stream, commands, stats)) => finish(
-            stream,
-            commands,
-            stats,
-            &config,
-            Some(PREFERRED_BUFFER),
-            device_name,
-        ),
+        Ok(built) => finish(built, &config, Some(PREFERRED_BUFFER), device_name),
         Err(e) => {
             eprintln!("Bloque de {PREFERRED_BUFFER} rechazado ({e}); uso el de serie");
             config.buffer_size = BufferSize::Default;
-            let (stream, commands, stats) = build(&device, &config, format)?;
-            finish(stream, commands, stats, &config, None, device_name)
+            let built = build(&device, &config, format)?;
+            finish(built, &config, None, device_name)
         }
     }
 }
 
-type Built = (cpal::Stream, rtrb::Producer<Command>, Arc<AudioStats>);
-
-fn finish(
+struct Built {
     stream: cpal::Stream,
     commands: rtrb::Producer<Command>,
+    replies: rtrb::Consumer<Reply>,
+    looper_capacity: usize,
     stats: Arc<AudioStats>,
+}
+
+fn finish(
+    b: Built,
     config: &StreamConfig,
     requested_buffer: Option<u32>,
     device_name: String,
 ) -> Result<AudioOutput> {
-    stream.play().context("no se pudo arrancar el audio")?;
+    b.stream.play().context("no se pudo arrancar el audio")?;
     Ok(AudioOutput {
-        _stream: stream,
-        commands,
-        stats,
+        _stream: b.stream,
+        commands: b.commands,
+        replies: b.replies,
+        looper_capacity: b.looper_capacity,
+        stats: b.stats,
         sample_rate: config.sample_rate,
         channels: config.channels,
         requested_buffer,
@@ -159,10 +167,12 @@ where
     T: SizedSample + FromSample<f32>,
 {
     let (producer, mut consumer) = rtrb::RingBuffer::<Command>::new(1024);
+    let (mut reply_tx, reply_rx) = rtrb::RingBuffer::<Reply>::new(16);
     let stats = Arc::new(AudioStats::default());
     let stats_cb = stats.clone();
     let channels = config.channels as usize;
     let mut engine = Engine::new(config.sample_rate as f32);
+    let looper_capacity = engine.looper_capacity();
     // Buffer estéreo reservado antes de arrancar: el callback no reserva memoria.
     let mut scratch = vec![0.0f32; MAX_BLOCK * 2];
 
@@ -198,6 +208,15 @@ where
                     }
                 }
             }
+            // Respuestas: si la cola está llena, esperan al siguiente bloque.
+            while !reply_tx.is_full() {
+                match engine.take_reply() {
+                    Some(r) => {
+                        let _ = reply_tx.push(r);
+                    }
+                    None => break,
+                }
+            }
             stats_cb.peak_bits.store(peak.to_bits(), Ordering::Relaxed);
             stats_cb
                 .looper
@@ -213,5 +232,11 @@ where
         |err| eprintln!("Aviso de audio: {err}"),
         None,
     )?;
-    Ok((stream, producer, stats))
+    Ok(Built {
+        stream,
+        commands: producer,
+        replies: reply_rx,
+        looper_capacity,
+        stats,
+    })
 }
