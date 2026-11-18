@@ -137,8 +137,8 @@ impl Taller {
         if self.undo.len() > 10 {
             self.undo.remove(0);
         }
-        let path = self.list[*i].path.clone();
-        self.save_current(&path);
+        let i = *i;
+        self.save_current(i);
         self.update_view();
         self.preview(link);
         Some(d.name())
@@ -152,18 +152,26 @@ impl Taller {
             return false;
         };
         *s = prev;
-        let path = self.list[*i].path.clone();
-        self.save_current(&path);
+        let i = *i;
+        self.save_current(i);
         self.update_view();
         self.preview(link);
         true
     }
 
-    fn save_current(&self, path: &std::path::Path) {
-        if let Some((_, s)) = &self.current
-            && let Err(e) = library::overwrite(path, s)
-        {
-            eprintln!("No se pudo guardar el sample: {e:#}");
+    /// Guarda el sample elegido (si era un MP3, OGG o FLAC, como WAV nuevo).
+    fn save_current(&mut self, i: usize) {
+        let Some((_, s)) = &self.current else { return };
+        let Some(entry) = self.list.get_mut(i) else {
+            return;
+        };
+        let res = library::editable_path(&entry.path).and_then(|p| {
+            library::overwrite(&p, s)?;
+            Ok(p)
+        });
+        match res {
+            Ok(p) => entry.path = p,
+            Err(e) => eprintln!("No se pudo guardar el sample: {e:#}"),
         }
     }
 

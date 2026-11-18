@@ -1,7 +1,7 @@
-//! Biblioteca de samples: `~/Música/Mapachsynthesizer/Samples/*.wav`.
+//! Biblioteca de samples: `~/Música/Mapachsynthesizer/Samples/`.
 //!
-//! Para traer sonidos de fuera, se dejan en `~/Música/Mapachsynthesizer/Importar/`: la app los
-//! convierte y luego mueve los originales a `Importar/importados/`, sin diálogos de ficheros.
+//! Se leen directamente WAV, MP3, OGG y FLAC: basta con descargar ficheros ahí. (También sigue
+//! funcionando la carpeta `Importar/`: lo que se deja allí se convierte a WAV y se mueve aquí.)
 
 use std::path::{Path, PathBuf};
 
@@ -43,7 +43,7 @@ pub fn list_in(dir: &Path) -> Vec<Entry> {
         .flatten()
         .filter_map(|e| {
             let path = e.path();
-            if path.extension().and_then(|x| x.to_str()) != Some("wav") {
+            if !path.is_file() || !is_audio(&path) {
                 return None;
             }
             let name = path.file_stem()?.to_string_lossy().into_owned();
@@ -60,6 +60,52 @@ pub fn list_in(dir: &Path) -> Vec<Entry> {
         .collect();
     v.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.name.cmp(&b.1.name)));
     v.into_iter().map(|x| x.1).collect()
+}
+
+/// ¿Es un fichero de audio que sabemos leer (por su extensión)?
+pub fn is_audio(path: &Path) -> bool {
+    path.extension()
+        .and_then(|x| x.to_str())
+        .is_some_and(|x| EXTENSIONS.contains(&x.to_lowercase().as_str()))
+}
+
+/// Pone primero los favoritos (por nombre de fichero), sin cambiar el orden de los demás.
+pub fn favorites_first(list: &mut [Entry], favorites: &[String]) {
+    let is_fav = |e: &Entry| {
+        e.path
+            .file_name()
+            .is_some_and(|f| favorites.iter().any(|x| x.as_str() == f.to_string_lossy()))
+    };
+    list.sort_by_key(|e| !is_fav(e));
+}
+
+/// Ruta donde guardar los cambios de un sample. Los WAV se sobrescriben; un MP3, OGG o FLAC se
+/// guarda como WAV nuevo y el original se mueve a `originales/` (nunca se borra).
+pub fn editable_path(path: &Path) -> Result<PathBuf> {
+    let is_wav = path
+        .extension()
+        .and_then(|x| x.to_str())
+        .is_some_and(|x| x.eq_ignore_ascii_case("wav"));
+    if is_wav {
+        return Ok(path.to_path_buf());
+    }
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let stem = path
+        .file_stem()
+        .map(|f| f.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "Sample".into());
+    let mut wav = dir.join(format!("{stem}.wav"));
+    let mut n = 2;
+    while wav.exists() {
+        wav = dir.join(format!("{stem} {n}.wav"));
+        n += 1;
+    }
+    let originals = dir.join("originales");
+    std::fs::create_dir_all(&originals)?;
+    if let Some(name) = path.file_name() {
+        std::fs::rename(path, originals.join(name))?;
+    }
+    Ok(wav)
 }
 
 /// Guarda un sample con un nombre que no pise a otro. Devuelve la ruta.
@@ -216,6 +262,35 @@ mod tests {
         assert!(import_pending(&import, &lib).is_empty());
         std::fs::remove_dir_all(import).unwrap();
         std::fs::remove_dir_all(lib).unwrap();
+    }
+
+    #[test]
+    fn lee_mp3_y_demas_directamente_y_favoritos_arriba() {
+        let dir = tmp("formatos");
+        // Un WAV de verdad con otra extensión no vale; con la suya, sí.
+        let a = save_in(&dir, "a", &tone()).unwrap();
+        std::fs::copy(&a, dir.join("b.WAV")).unwrap();
+        std::fs::write(dir.join("nota.txt"), b"no").unwrap();
+        std::fs::create_dir_all(dir.join("originales")).unwrap();
+        let mut list = list_in(&dir);
+        assert_eq!(list.len(), 2);
+        favorites_first(&mut list, &["b.WAV".into()]);
+        assert_eq!(list[0].name, "b");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn editar_un_mp3_guarda_un_wav_y_conserva_el_original() {
+        let dir = tmp("editable");
+        let mp3 = dir.join("perro.mp3");
+        std::fs::write(&mp3, b"x").unwrap();
+        let wav = editable_path(&mp3).unwrap();
+        assert_eq!(wav, dir.join("perro.wav"));
+        assert!(dir.join("originales/perro.mp3").exists());
+        assert!(!mp3.exists());
+        let w = dir.join("gato.wav");
+        assert_eq!(editable_path(&w).unwrap(), w);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
