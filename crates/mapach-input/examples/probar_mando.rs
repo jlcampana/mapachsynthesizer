@@ -7,7 +7,9 @@ use std::sync::mpsc;
 fn main() {
     let (tx, rx) = mpsc::channel();
     let (stx, srx) = mpsc::channel();
-    mapach_input::mando::spawn(tx, stx, || {});
+    let (rtx, _rrx) = mpsc::channel();
+    let shared = std::sync::Arc::new(std::sync::Mutex::new(mapach_input::mando::Shared::default()));
+    mapach_input::mando::spawn(tx, stx, rtx, shared, || {});
     println!("Buscando el mando…");
     loop {
         while let Ok(s) = srx.try_recv() {

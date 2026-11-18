@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 evdev = "0.13.2"
+serde = { version = "1.0.229", features = ["derive"] }
 
 [lints]
 workspace = true

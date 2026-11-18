@@ -1948,6 +1948,7 @@ name = "mapach-input"
 version = "0.1.0"
 dependencies = [
  "evdev",
+ "serde",
 ]
 
 [[package]]

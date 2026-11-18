@@ -11,13 +11,19 @@ pub enum PapaItem {
     Nombres,
     /// Arrancar al encender el ordenador.
     Arranque,
+    /// Asistente "Aprender mando".
+    Aprender,
+    /// Volver a la tabla de serie del mando.
+    MandoDeSerie,
 }
 
 impl PapaItem {
-    pub const ALL: [PapaItem; 3] = [
+    pub const ALL: [PapaItem; 5] = [
         PapaItem::VolumenMaximo,
         PapaItem::Nombres,
         PapaItem::Arranque,
+        PapaItem::Aprender,
+        PapaItem::MandoDeSerie,
     ];
 
     pub fn label(self) -> &'static str {
@@ -25,6 +31,8 @@ impl PapaItem {
             PapaItem::VolumenMaximo => "Volumen máximo",
             PapaItem::Nombres => "Nombres de acordes",
             PapaItem::Arranque => "Arrancar al encender",
+            PapaItem::Aprender => "Aprender mando",
+            PapaItem::MandoDeSerie => "Mando de serie",
         }
     }
 }

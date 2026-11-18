@@ -1442,15 +1442,54 @@ fn taller_screen(c: &Canvas, st: &State, extra: &Extra) {
     }
 }
 
+/// Asistente "Aprender mando".
+pub fn draw_learn(c: &Canvas, step: usize, total: usize, prompt: &str, msg: Option<&str>) {
+    c.painter
+        .rect_filled(c.painter.clip_rect(), 0.0, Color32::from_black_alpha(210));
+    c.rect(160.0, 90.0, 640.0, 360.0, 28.0, OLED);
+    c.rect_stroke(160.0, 90.0, 640.0, 360.0, 28.0, 4.0, hex(0x1EC8FF));
+    c.text(
+        480.0,
+        130.0,
+        Align2::CENTER_CENTER,
+        "🎮 Aprender mando",
+        30.0,
+        NEON_AMARILLO,
+    );
+    c.text(480.0, 230.0, Align2::CENTER_CENTER, prompt, 26.0, BLANCO);
+    if let Some(m) = msg {
+        c.text(480.0, 310.0, Align2::CENTER_CENTER, m, 17.0, MENU_ROJO);
+    }
+    let f = step as f32 / total.max(1) as f32;
+    c.rect(220.0, 350.0, 520.0, 16.0, 8.0, OLED_APAGADO);
+    c.rect(220.0, 350.0, 520.0 * f, 16.0, 8.0, hex(0x2ED573));
+    c.text(
+        480.0,
+        390.0,
+        Align2::CENTER_CENTER,
+        format!("{step} de {total}"),
+        16.0,
+        NEON_CIAN,
+    );
+    c.text(
+        480.0,
+        425.0,
+        Align2::CENTER_CENTER,
+        "Esc cancelar",
+        15.0,
+        NEON_CIAN.gamma_multiply(0.6),
+    );
+}
+
 /// Pantalla del modo papá.
 pub fn draw_papa(c: &Canvas, lines: &[String]) {
     c.painter
         .rect_filled(c.painter.clip_rect(), 0.0, Color32::from_black_alpha(200));
-    c.rect(180.0, 80.0, 600.0, 380.0, 28.0, OLED);
-    c.rect_stroke(180.0, 80.0, 600.0, 380.0, 28.0, 4.0, NARANJA);
+    c.rect(180.0, 60.0, 600.0, 430.0, 28.0, OLED);
+    c.rect_stroke(180.0, 60.0, 600.0, 430.0, 28.0, 4.0, NARANJA);
     c.text(
         480.0,
-        120.0,
+        100.0,
         Align2::CENTER_CENTER,
         "🔧 Modo papá",
         32.0,
@@ -1459,16 +1498,16 @@ pub fn draw_papa(c: &Canvas, lines: &[String]) {
     for (i, l) in lines.iter().enumerate() {
         c.text(
             220.0,
-            170.0 + i as f32 * 30.0,
+            148.0 + i as f32 * 26.0,
             Align2::LEFT_CENTER,
             l,
-            19.0,
+            18.0,
             NEON_CIAN,
         );
     }
     c.text(
         480.0,
-        430.0,
+        468.0,
         Align2::CENTER_CENTER,
         "Q salir del programa · Esc volver",
         20.0,

@@ -6,6 +6,7 @@
 //! de la ventana. Ver `docs/mando.md`.
 
 use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -20,6 +21,116 @@ pub const PRODUCT: u16 = 0x8850;
 pub enum Mapped {
     Control(Control),
     Turn(Knob, i32),
+}
+
+/// A qué control físico del mando corresponde un código.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Target {
+    /// Tecla 1–16 (la 1 arriba a la izquierda).
+    Key(u8),
+    /// Perilla 0–2 girada a la izquierda.
+    Left(u8),
+    /// Perilla 0–2 girada a la derecha.
+    Right(u8),
+    /// Perilla 0–2 pulsada.
+    Push(u8),
+}
+
+impl Target {
+    /// Los 25 controles del mando, en el orden del asistente "Aprender mando".
+    pub fn all() -> Vec<Target> {
+        let mut v: Vec<Target> = (1..=16).map(Target::Key).collect();
+        for k in 0..3 {
+            v.extend([Target::Right(k), Target::Left(k), Target::Push(k)]);
+        }
+        v
+    }
+
+    fn knob(k: u8) -> Knob {
+        match k {
+            0 => Knob::Volumen,
+            1 => Knob::Magica,
+            _ => Knob::Tempo,
+        }
+    }
+
+    fn mapped(self) -> Mapped {
+        match self {
+            Target::Key(n) => Mapped::Control(Control::Pad(n)),
+            Target::Left(k) => Mapped::Turn(Self::knob(k), -1),
+            Target::Right(k) => Mapped::Turn(Self::knob(k), 1),
+            Target::Push(k) => Mapped::Control(Control::KnobPress(Self::knob(k))),
+        }
+    }
+}
+
+/// Tabla de códigos de `evdev` → controles del mando. Se puede volver a aprender.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Mapping {
+    pub codes: Vec<(u16, Target)>,
+}
+
+impl Default for Mapping {
+    /// Los códigos grabados con `herramientas/mando.py` (ver `docs/mando.md`).
+    fn default() -> Self {
+        use KeyCode as K;
+        let keys = [
+            K::KEY_F13,
+            K::KEY_F14,
+            K::KEY_F15,
+            K::KEY_F16,
+            K::KEY_F17,
+            K::KEY_F18,
+            K::KEY_F19,
+            K::KEY_F20,
+            K::KEY_F21,
+            K::KEY_F22,
+            K::KEY_F23,
+            K::KEY_F24,
+            K::KEY_KP1,
+            K::KEY_KP2,
+            K::KEY_KP3,
+            K::KEY_KP4,
+        ];
+        let mut codes: Vec<(u16, Target)> = keys
+            .iter()
+            .enumerate()
+            .map(|(i, k)| (k.code(), Target::Key(i as u8 + 1)))
+            .collect();
+        let knobs = [
+            (K::KEY_KP5, K::KEY_KP6, K::KEY_KP7),
+            (K::KEY_KP8, K::KEY_KP9, K::KEY_KP0),
+            (K::KEY_KPSLASH, K::KEY_KPASTERISK, K::KEY_KPMINUS),
+        ];
+        for (i, (l, r, p)) in knobs.iter().enumerate() {
+            let k = i as u8;
+            codes.push((l.code(), Target::Left(k)));
+            codes.push((r.code(), Target::Right(k)));
+            codes.push((p.code(), Target::Push(k)));
+        }
+        Self { codes }
+    }
+}
+
+impl Mapping {
+    /// Traduce un evento de tecla (`value`: 1 pulsar, 0 soltar, 2 repetición).
+    pub fn translate(&self, code: u16, value: i32) -> Option<Event> {
+        let target = self.codes.iter().find(|(c, _)| *c == code)?.1;
+        match (target.mapped(), value) {
+            (Mapped::Control(c), 1) => Some(Event::Press(c)),
+            (Mapped::Control(c), 0) => Some(Event::Release(c)),
+            (Mapped::Turn(k, d), 1) => Some(Event::Turn(k, d)),
+            _ => None,
+        }
+    }
+}
+
+/// Lo que comparten el hilo del mando y la app.
+#[derive(Debug, Default)]
+pub struct Shared {
+    pub mapping: Mapping,
+    /// Aprendiendo: los códigos se mandan crudos, sin traducir.
+    pub learning: bool,
 }
 
 /// Control lógico de la tecla `n` (1–16) del mando, en modo Tocar.
@@ -39,40 +150,6 @@ pub fn key_control(n: u8) -> Option<Control> {
     })
 }
 
-/// Traduce un código de `evdev` del mando.
-pub fn map_code(code: KeyCode) -> Option<Mapped> {
-    use KeyCode as K;
-    let key = |n| Some(Mapped::Control(Control::Pad(n)));
-    match code {
-        K::KEY_F13 => key(1),
-        K::KEY_F14 => key(2),
-        K::KEY_F15 => key(3),
-        K::KEY_F16 => key(4),
-        K::KEY_F17 => key(5),
-        K::KEY_F18 => key(6),
-        K::KEY_F19 => key(7),
-        K::KEY_F20 => key(8),
-        K::KEY_F21 => key(9),
-        K::KEY_F22 => key(10),
-        K::KEY_F23 => key(11),
-        K::KEY_F24 => key(12),
-        K::KEY_KP1 => key(13),
-        K::KEY_KP2 => key(14),
-        K::KEY_KP3 => key(15),
-        K::KEY_KP4 => key(16),
-        K::KEY_KP5 => Some(Mapped::Turn(Knob::Volumen, -1)),
-        K::KEY_KP6 => Some(Mapped::Turn(Knob::Volumen, 1)),
-        K::KEY_KP7 => Some(Mapped::Control(Control::KnobPress(Knob::Volumen))),
-        K::KEY_KP8 => Some(Mapped::Turn(Knob::Magica, -1)),
-        K::KEY_KP9 => Some(Mapped::Turn(Knob::Magica, 1)),
-        K::KEY_KP0 => Some(Mapped::Control(Control::KnobPress(Knob::Magica))),
-        K::KEY_KPSLASH => Some(Mapped::Turn(Knob::Tempo, -1)),
-        K::KEY_KPASTERISK => Some(Mapped::Turn(Knob::Tempo, 1)),
-        K::KEY_KPMINUS => Some(Mapped::Control(Control::KnobPress(Knob::Tempo))),
-        _ => None,
-    }
-}
-
 /// Estado de la conexión con el mando, para enseñarlo en pantalla.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
@@ -88,6 +165,8 @@ pub enum Status {
 pub fn spawn(
     tx: Sender<Event>,
     status: Sender<Status>,
+    raw: Sender<u16>,
+    shared: Arc<Mutex<Shared>>,
     on_event: impl Fn() + Send + 'static,
 ) -> thread::JoinHandle<()> {
     thread::Builder::new()
@@ -111,7 +190,7 @@ pub fn spawn(
                 if let Ok(devices) = found
                     && !devices.is_empty()
                 {
-                    if read_all(devices, &tx, &on_event).is_err() {
+                    if read_all(devices, &tx, &raw, &shared, &on_event).is_err() {
                         return; // La interfaz se ha cerrado.
                     }
                     continue;
@@ -178,9 +257,12 @@ fn is_mando_sysfs(path: &std::path::Path) -> bool {
 fn read_all(
     devices: Vec<Device>,
     tx: &Sender<Event>,
+    raw: &Sender<u16>,
+    shared: &Arc<Mutex<Shared>>,
     on_event: &(impl Fn() + Send + 'static),
 ) -> Result<(), ()> {
-    let (itx, irx) = std::sync::mpsc::channel::<Option<Event>>();
+    // Los hilos de cada interfaz mandan códigos crudos (código, valor).
+    let (itx, irx) = std::sync::mpsc::channel::<Option<(u16, i32)>>();
     for mut dev in devices {
         let itx = itx.clone();
         thread::spawn(move || {
@@ -189,8 +271,7 @@ fn read_all(
                     Ok(events) => {
                         for ev in events {
                             if let EventSummary::Key(_, code, value) = ev.destructure()
-                                && let Some(e) = translate(code, value)
-                                && itx.send(Some(e)).is_err()
+                                && itx.send(Some((code.code(), value))).is_err()
                             {
                                 return;
                             }
@@ -206,26 +287,30 @@ fn read_all(
     }
     drop(itx);
     for msg in irx {
-        match msg {
-            Some(e) => {
-                tx.send(e).map_err(|_| ())?;
+        let Some((code, value)) = msg else {
+            // Una interfaz se ha caído: volvemos a buscar.
+            return Ok(());
+        };
+        let (learning, event) = {
+            let sh = shared.lock().map_err(|_| ())?;
+            (sh.learning, sh.mapping.translate(code, value))
+        };
+        if learning {
+            if value == 1 {
+                raw.send(code).map_err(|_| ())?;
                 on_event();
             }
-            // Una interfaz se ha caído: volvemos a buscar.
-            None => return Ok(()),
+        } else if let Some(e) = event {
+            tx.send(e).map_err(|_| ())?;
+            on_event();
         }
     }
     Ok(())
 }
 
-/// Traduce un evento de tecla (`value`: 1 pulsar, 0 soltar, 2 repetición).
+/// Traduce un evento de tecla con la tabla de serie.
 pub fn translate(code: KeyCode, value: i32) -> Option<Event> {
-    match (map_code(code)?, value) {
-        (Mapped::Control(c), 1) => Some(Event::Press(c)),
-        (Mapped::Control(c), 0) => Some(Event::Release(c)),
-        (Mapped::Turn(k, d), 1) => Some(Event::Turn(k, d)),
-        _ => None,
-    }
+    Mapping::default().translate(code.code(), value)
 }
 
 #[cfg(test)]
@@ -276,5 +361,18 @@ mod tests {
             assert!(key_control(n).is_some(), "{n}");
         }
         assert!(key_control(17).is_none());
+    }
+
+    #[test]
+    fn la_tabla_de_serie_tiene_los_25_controles() {
+        let m = Mapping::default();
+        assert_eq!(m.codes.len(), 25);
+        for t in Target::all() {
+            assert!(m.codes.iter().any(|(_, x)| *x == t), "{t:?}");
+        }
+        let mut codes: Vec<u16> = m.codes.iter().map(|c| c.0).collect();
+        codes.sort();
+        codes.dedup();
+        assert_eq!(codes.len(), 25);
     }
 }

@@ -1,6 +1,7 @@
 //! Mapachsynthesizer: sintetizador para niños.
 
 mod ajustes;
+mod aprender;
 mod canciones;
 mod captura;
 mod keyboard;
@@ -73,6 +74,10 @@ struct App {
     mando_rx: Receiver<Event>,
     mando_status_rx: Receiver<mando::Status>,
     mando_status: mando::Status,
+    mando_shared: std::sync::Arc<std::sync::Mutex<mando::Shared>>,
+    mando_raw: Receiver<u16>,
+    /// Asistente "Aprender mando" en marcha.
+    learn: Option<aprender::Learn>,
     papa: bool,
     papa_sel: usize,
     /// Tecla de acorde pulsada con el ratón o el dedo.
@@ -110,7 +115,14 @@ impl App {
     ) -> Self {
         let (tx, mando_rx) = mpsc::channel();
         let (stx, mando_status_rx) = mpsc::channel();
-        mando::spawn(tx, stx, move || ctx.request_repaint());
+        let (rtx, mando_raw) = mpsc::channel();
+        let mando_shared = std::sync::Arc::new(std::sync::Mutex::new(mando::Shared {
+            mapping: aprender::load(),
+            learning: false,
+        }));
+        mando::spawn(tx, stx, rtx, mando_shared.clone(), move || {
+            ctx.request_repaint()
+        });
         let mut state = State::default();
         let mut last_song = None;
         let mut instrument = None;
@@ -147,6 +159,9 @@ impl App {
             mando_rx,
             mando_status_rx,
             mando_status: mando::Status::Buscando,
+            mando_shared,
+            mando_raw,
+            learn: None,
             papa: false,
             papa_sel: 0,
             pointer_chord: None,
@@ -390,6 +405,20 @@ impl App {
         }
     }
 
+    /// Empieza o termina el asistente "Aprender mando".
+    fn set_learning(&mut self, on: bool, mapping: Option<mando::Mapping>) {
+        if let Ok(mut sh) = self.mando_shared.lock() {
+            sh.learning = on;
+            if let Some(m) = mapping {
+                sh.mapping = m;
+            }
+        }
+        self.learn = on.then(aprender::Learn::new);
+        if on {
+            self.papa = false;
+        }
+    }
+
     /// Teclas en el modo papá: ↑↓ eligen, ←→ cambian.
     fn papa_key(&mut self, key: egui::Key) {
         let n = papa::PapaItem::ALL.len();
@@ -420,6 +449,19 @@ impl App {
                     eprintln!("Arranque automático: {e}");
                 }
             }
+            papa::PapaItem::Aprender => {
+                if self.mando_status == mando::Status::Conectado {
+                    self.set_learning(true, None);
+                } else {
+                    self.state.show_toast("Conecta el mando primero");
+                }
+            }
+            papa::PapaItem::MandoDeSerie => {
+                let _ = aprender::path().map(std::fs::remove_file);
+                self.set_learning(false, Some(mando::Mapping::default()));
+                self.state
+                    .show_toast("🎮 Mando como de fábrica de Mapachsynthesizer");
+            }
         }
     }
 
@@ -447,6 +489,7 @@ impl App {
                 papa::PapaItem::VolumenMaximo => format!("{:.0} dBFS", self.state.max_db),
                 papa::PapaItem::Nombres => si_no(self.state.show_names).into(),
                 papa::PapaItem::Arranque => si_no(papa::autostart_enabled()).into(),
+                papa::PapaItem::Aprender | papa::PapaItem::MandoDeSerie => "Intro".into(),
             };
             let mark = if i == self.papa_sel { "▶" } else { "  " };
             v.push(format!("{mark} {}: ◀ {value} ▶", item.label()));
@@ -487,6 +530,17 @@ impl eframe::App for App {
             }
         }
 
+        while let Ok(code) = self.mando_raw.try_recv() {
+            if let Some(l) = &mut self.learn
+                && let Some(m) = l.code(code)
+            {
+                if let Err(e) = aprender::save(&m) {
+                    eprintln!("No se pudo guardar el mando: {e}");
+                }
+                self.set_learning(false, Some(m));
+                self.state.show_toast("🎮 ¡Mando aprendido!");
+            }
+        }
         while let Ok(s) = self.mando_status_rx.try_recv() {
             self.mando_status = s;
         }
@@ -529,6 +583,12 @@ impl eframe::App for App {
                 ..
             } = ev
             {
+                if self.learn.is_some() {
+                    if pressed && key == egui::Key::Escape {
+                        self.set_learning(false, None);
+                    }
+                    continue;
+                }
                 if self.papa {
                     if pressed && key == egui::Key::Q {
                         self.autosave(now, true);
@@ -631,6 +691,15 @@ impl eframe::App for App {
         );
         if self.papa {
             ui::draw_papa(&canvas, &self.papa_lines());
+        }
+        if let Some(l) = &self.learn {
+            ui::draw_learn(
+                &canvas,
+                l.step(),
+                l.total(),
+                &l.current().map(aprender::prompt).unwrap_or_default(),
+                l.message.as_deref(),
+            );
         }
 
         self.autosave(now, false);
