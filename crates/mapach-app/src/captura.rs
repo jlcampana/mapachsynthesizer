@@ -169,6 +169,23 @@ impl Captura {
                 v.push(p(Arrow(A::Right)));
                 v
             }
+            16 => vec![
+                p(Menu(M::Modo)),
+                r(Menu(M::Modo)),
+                p(Arrow(A::Up)),
+                p(Arrow(A::Up)),
+                p(Arrow(A::Right)),
+            ],
+            17 => vec![
+                p(Menu(M::Modo)),
+                r(Menu(M::Modo)),
+                p(Arrow(A::Up)),
+                p(Arrow(A::Right)),
+                p(Chord(0)),
+                r(Chord(0)),
+                p(Chord(0)),
+                r(Chord(0)),
+            ],
             _ => vec![],
         }
     }

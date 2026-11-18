@@ -83,6 +83,10 @@ impl PlayMode {
     }
 }
 
+mod games;
+
+pub use games::{Follow, Simon};
+
 /// Pantallas.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Screen {
@@ -182,6 +186,10 @@ pub enum Item {
     Sala,
     /// Empieza el juego de oído.
     Juego,
+    /// Empieza *Cópiame*.
+    Copiame,
+    /// Empieza *Sigue la canción*.
+    Sigue,
 }
 
 impl Item {
@@ -216,6 +224,8 @@ impl Item {
                 Item::Estilo,
                 Item::Variacion,
                 Item::Juego,
+                Item::Copiame,
+                Item::Sigue,
             ],
         }
     }
@@ -245,6 +255,8 @@ impl Item {
             Item::Cantidad => "Cantidad",
             Item::Sala => "Sala",
             Item::Juego => "Juego de oído",
+            Item::Copiame => "Cópiame",
+            Item::Sigue => "Sigue la canción",
         }
     }
 }
@@ -301,6 +313,10 @@ pub struct State {
     pub locks: [Option<Direction>; BUTTONS],
     /// Juego de oído en marcha.
     pub game: Option<EarGame>,
+    pub simon: Option<Simon>,
+    pub follow: Option<Follow>,
+    /// Estrellas ganadas en los juegos.
+    pub stars: u32,
     /// Volumen máximo en dBFS (techo del limitador; se cambia en el modo papá).
     pub max_db: f32,
     /// Presets rápidos F1–F4 (como P1–P4 del HiChord).
@@ -385,6 +401,9 @@ impl Default for State {
             locks: [None; BUTTONS],
             drum_samples: Default::default(),
             game: None,
+            simon: None,
+            follow: None,
+            stars: 0,
             max_db: mapach_engine::DEFAULT_MAX_DB,
             presets: Default::default(),
             preset_hold: None,
@@ -645,6 +664,8 @@ impl State {
             self.clear_track(t, &mut out);
         }
         self.game_tick(now, &mut out);
+        self.simon_tick(now, &mut out);
+        self.follow_tick(now);
         if let Some((p, since)) = self.preset_hold
             && now - since >= Self::HOLD_TO_CLEAR
         {
@@ -863,22 +884,44 @@ impl State {
         if self.screen == Screen::Taller && self.taller_press(c) {
             return;
         }
-        if self.game.is_some() {
+        if self.in_game() {
             match c {
-                Control::Chord(b) if (b as usize) < BUTTONS => {
+                Control::Chord(_) | Control::ChordHigh(_) if self.follow.is_some() => {
+                    self.follow_press(c, out);
+                    return;
+                }
+                Control::Chord(b) if (b as usize) < BUTTONS && self.simon.is_some() => {
+                    if self.simon_press(b) {
+                        return;
+                    }
+                }
+                Control::Chord(b) if (b as usize) < BUTTONS && self.game.is_some() => {
                     // Suena lo que ha elegido y se comprueba.
                     self.game_guess(b, out);
                 }
                 Control::Play | Control::Record => {
-                    self.play_game_chord(out);
+                    if self.game.is_some() {
+                        self.play_game_chord(out);
+                    }
+                    let now = self.now;
+                    if let Some(s) = &mut self.simon
+                        && s.showing.is_none()
+                        && s.feedback.is_none()
+                    {
+                        s.showing = Some((0, now + 0.2));
+                        s.pos = 0;
+                    }
+                    if let Some(f) = &mut self.follow {
+                        f.pos = 0;
+                        f.done_until = None;
+                    }
                     return;
                 }
                 Control::KnobPress(Knob::Magica)
                 | Control::Menu(_)
                 | Control::Canciones
                 | Control::Taller => {
-                    self.game = None;
-                    out.push(Command::ChordOff);
+                    self.quit_games(out);
                     if matches!(c, Control::Menu(_)) {
                         // Que soltarlo no abra la página.
                         self.menu_used = true;
@@ -1253,7 +1296,7 @@ impl State {
             }
             Item::Nombres => self.show_names = !self.show_names,
             Item::Sonido => {
-                self.sound = wrap(self.sound, d, SOUNDS.len());
+                self.sound = wrap(self.sound, d, self.available_sounds());
                 self.apply_sound(out);
             }
             Item::Ataque => {
@@ -1326,6 +1369,8 @@ impl State {
                 out.push(Command::SetReverb(self.reverb));
             }
             Item::Juego => self.start_game(out),
+            Item::Copiame => self.start_simon(out),
+            Item::Sigue => self.start_follow(out),
         }
     }
 
@@ -1369,6 +1414,7 @@ impl State {
 
     /// Empieza el juego de oído (en modo Tocar).
     fn start_game(&mut self, out: &mut Vec<Command>) {
+        self.quit_games(out);
         self.open_menu = None;
         self.set_play_mode(PlayMode::Tocar, out);
         self.game = Some(EarGame {
@@ -1417,19 +1463,25 @@ impl State {
         let Some(g) = &mut self.game else { return };
         let ok = b == g.target;
         g.feedback = Some((ok, now + 1.2));
+        let mut star = false;
         if ok {
             g.score += 1;
             // Cada 3 aciertos entra una tecla más, hasta las 7.
             if g.score.is_multiple_of(3) && g.level < 7 {
                 g.level += 1;
             }
+            star = g.score.is_multiple_of(5);
         } else {
             g.fails += 1;
         }
+
         // Al acertar, la siguiente suena cuando acaba el mensaje.
         if ok {
             g.playing_until = None;
             out.push(Command::ChordOff);
+        }
+        if star {
+            self.earn_star();
         }
     }
 
@@ -1453,6 +1505,7 @@ impl State {
     }
 
     fn randomize(&mut self, m: Menu, out: &mut Vec<Command>) {
+        let available = self.available_sounds();
         let mut r = |n: usize| {
             // xorshift32
             self.rng ^= self.rng << 13;
@@ -1471,7 +1524,7 @@ impl State {
                 self.revoice(out);
             }
             Menu::Sonido => {
-                let s = r(SOUNDS.len());
+                let s = r(available);
                 let b = r(100) as f32 / 100.0;
                 let fx = r(Effect::ALL.len());
                 let amt = r(100) as f32 / 100.0;

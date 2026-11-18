@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use mapach_dsp::drums::KITS;
 use mapach_dsp::effects::Effect;
 use mapach_engine::drums::{STYLES, VARIATIONS};
-use mapach_engine::{ARP_PATTERNS, RATES, SOUNDS, STRUM_MS};
+use mapach_engine::{ARP_PATTERNS, RATES, STRUM_MS};
 use mapach_theory::{Direction, Key, ModifierMode, Scale};
 use serde::{Deserialize, Serialize};
 
@@ -52,6 +52,8 @@ pub struct Ajustes {
     pub fijados: Vec<i8>,
     /// Sample de cada golpe de batería ("" = el de serie).
     pub golpes: Vec<String>,
+    /// Estrellas ganadas en los juegos.
+    pub estrellas: u32,
 }
 
 const DIRS: [Direction; 8] = [
@@ -120,6 +122,7 @@ impl Ajustes {
                 .iter()
                 .map(|g| g.clone().unwrap_or_default())
                 .collect(),
+            estrellas: s.stars,
         }
     }
 
@@ -129,7 +132,14 @@ impl Ajustes {
         key.octave = self.octava.clamp(-2, 2);
         s.key = key;
         s.mod_mode = ModifierMode::ALL[self.flechas % ModifierMode::ALL.len()];
-        s.sound = self.sonido % SOUNDS.len();
+        // Las estrellas antes que el sonido: deciden qué sonidos secretos se pueden usar.
+        // (Dentro de un preset vienen a 0 y no deben quitar las ganadas.)
+        s.stars = s.stars.max(self.estrellas);
+        s.sound = if self.sonido < s.available_sounds() {
+            self.sonido
+        } else {
+            0
+        };
         s.volume = self.volumen.clamp(0.0, 1.0);
         s.attack = self.ataque.clamp(0.0, 5.0);
         s.release = self.release.clamp(0.0, 8.0);

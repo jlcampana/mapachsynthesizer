@@ -523,7 +523,11 @@ impl App {
             None => v.push("Sin audio".into()),
         }
         v.push(format!("Mando: {}", status_text(self.mando_status)));
-        v.push(format!("Versión {}", env!("CARGO_PKG_VERSION")));
+        v.push(format!(
+            "Versión {} · ⭐ {} estrellas",
+            env!("CARGO_PKG_VERSION"),
+            self.state.stars
+        ));
         v.push(String::new());
         let si_no = |b: bool| if b { "sí" } else { "no" };
         for (i, item) in papa::PapaItem::ALL.iter().enumerate() {
@@ -754,6 +758,7 @@ impl eframe::App for App {
             || self.state.looper.playing
             || self.state.current.is_some()
             || !self.state.melody.is_empty()
+            || self.state.in_game()
         {
             ctx.request_repaint();
         } else {

@@ -96,6 +96,25 @@ const fn patch(
     }
 }
 
+/// Pedorreta: pulso y sierra muy graves, con filtro resonante y mucho meneo.
+const fn fart() -> Patch {
+    let mut p = patch(
+        Pulse,
+        Saw,
+        -12.0,
+        35.0,
+        0.7,
+        AdsrParams::new(0.01, 0.25, 0.6, 0.12),
+        0.22,
+        0.65,
+        1.8,
+    );
+    p.osc1_semitones = -24.0;
+    p.osc2_semitones = -24.0;
+    p.vibrato = 0.9;
+    p
+}
+
 /// Patch de otro motor, con su envolvente y brillo.
 const fn other(kind: Kind, env: AdsrParams, brightness: f32, vibrato: f32) -> Patch {
     let mut p = patch(Sine, Sine, 0.0, 0.0, 0.0, env, brightness, 0.0, 0.0);
@@ -107,7 +126,7 @@ const fn other(kind: Kind, env: AdsrParams, brightness: f32, vibrato: f32) -> Pa
 use Waveform::*;
 
 /// Sonidos de serie del motor analógico.
-pub const SOUNDS: [Sound; 21] = [
+pub const SOUNDS: [Sound; 23] = [
     Sound {
         name: "Nube",
         icon: "☁",
@@ -380,6 +399,24 @@ pub const SOUNDS: [Sound; 21] = [
             AdsrParams::new(0.002, 0.1, 1.0, 0.3),
             1.0,
             0.0,
+        ),
+    },
+    // --- Secretos (se desbloquean con estrellas; siempre al final) ---
+    Sound {
+        name: "Pedorreta",
+        icon: "💨",
+        color: [0x8B, 0x5A, 0x2B],
+        patch: fart(),
+    },
+    Sound {
+        name: "Gato",
+        icon: "🐱",
+        color: [0xFF, 0xB3, 0x47],
+        patch: other(
+            Kind::Formant { vowel: 2 },
+            AdsrParams::new(0.12, 0.4, 0.6, 0.5),
+            1.0,
+            0.6,
         ),
     },
 ];

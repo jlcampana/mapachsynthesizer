@@ -279,6 +279,13 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
         menu_page(c, st, m, sel);
     } else if let Some(g) = &st.game {
         game_view(c, g, extra);
+        stars_line(c, st);
+    } else if let Some(sm) = &st.simon {
+        simon_view(c, sm);
+        stars_line(c, st);
+    } else if let Some(f) = &st.follow {
+        follow_view(c, f, st);
+        stars_line(c, st);
     } else if st.looper_visible() {
         looper_view(c, st, extra);
         return;
@@ -716,7 +723,7 @@ fn value_text(st: &State, item: Item) -> String {
         Item::Efecto => format!("{} {}", st.effect.icon(), st.effect.name()),
         Item::Cantidad => format!("{:.0} %", st.effect_amount * 100.0),
         Item::Sala => format!("{:.0} %", st.reverb * 100.0),
-        Item::Juego => "▶".to_string(),
+        Item::Juego | Item::Copiame | Item::Sigue => "▶".to_string(),
     }
 }
 
@@ -821,6 +828,117 @@ fn joystick(c: &Canvas, st: &State) {
 
 const LETRAS: [&str; 7] = ["A", "S", "D", "F", "G", "H", "J"];
 const ROMANOS: [&str; 7] = ["I", "ii", "iii", "IV", "V", "vi", "vii"];
+
+/// Estrellas ganadas, abajo a la izquierda de la pantalla.
+fn stars_line(c: &Canvas, st: &State) {
+    c.text(
+        176.0,
+        112.0,
+        Align2::LEFT_CENTER,
+        format!("⭐ {}", st.stars),
+        16.0,
+        NEON_AMARILLO,
+    );
+}
+
+/// *Cópiame*.
+fn simon_view(c: &Canvas, sm: &crate::state::Simon) {
+    c.text(
+        430.0,
+        116.0,
+        Align2::CENTER_CENTER,
+        "🧠 Cópiame",
+        26.0,
+        NEON_AMARILLO,
+    );
+    let (text, col) = match (sm.feedback, sm.showing.is_some()) {
+        (Some((true, _)), _) => ("¡Muy bien! Una más…", hex(0x2ED573)),
+        (Some((false, _)), _) => ("¡Uy! Escucha otra vez", MENU_ROJO),
+        (None, true) => ("Escucha y mira…", NEON_CIAN),
+        (None, false) => ("¡Te toca!", NEON_AMARILLO),
+    };
+    c.text(430.0, 170.0, Align2::CENTER_CENTER, text, 26.0, col);
+    // Bolitas: una por acorde de la serie; las ya repetidas, encendidas.
+    let n = sm.seq.len();
+    for i in 0..n {
+        let x = 430.0 + (i as f32 - (n as f32 - 1.0) / 2.0) * 26.0;
+        let on = sm.showing.is_none() && i < sm.pos;
+        let fill = if on {
+            ACORDES[sm.seq[i] as usize]
+        } else {
+            OLED_APAGADO.lerp_to_gamma(BLANCO, 0.25)
+        };
+        c.circle(x, 222.0, 9.0, fill);
+    }
+    c.text(
+        430.0,
+        262.0,
+        Align2::CENTER_CENTER,
+        format!("Serie de {n} · récord {}", sm.best),
+        14.0,
+        NEON_CIAN.gamma_multiply(0.7),
+    );
+}
+
+/// *Sigue la canción*.
+fn follow_view(c: &Canvas, f: &crate::state::Follow, st: &State) {
+    c.text(
+        430.0,
+        116.0,
+        Align2::CENTER_CENTER,
+        format!("🎶 {}", f.title()),
+        26.0,
+        NEON_AMARILLO,
+    );
+    if f.done_until.is_some() {
+        c.text(
+            430.0,
+            190.0,
+            Align2::CENTER_CENTER,
+            "🎉 ¡Canción completa!",
+            32.0,
+            hex(0x2ED573),
+        );
+        return;
+    }
+    // Las próximas notas, de colores; la primera, grande.
+    let notes = f.notes();
+    for (k, &d) in notes.iter().skip(f.pos).take(9).enumerate() {
+        let col = ACORDES[(d % 7) as usize];
+        let x = 250.0 + k as f32 * 46.0;
+        let r = if k == 0 { 24.0 } else { 15.0 };
+        c.circle(x, 186.0, r, col);
+        let label = if d >= 7 {
+            format!("{}↑", d % 7 + 1)
+        } else {
+            (d + 1).to_string()
+        };
+        c.text(
+            x,
+            186.0,
+            Align2::CENTER_CENTER,
+            label,
+            if k == 0 { 20.0 } else { 13.0 },
+            texto_sobre(col),
+        );
+    }
+    let f_done = f.pos as f32 / notes.len() as f32;
+    c.rect(250.0, 236.0, 360.0, 10.0, 5.0, OLED_APAGADO);
+    c.rect(250.0, 236.0, 360.0 * f_done, 10.0, 5.0, NEON_AMARILLO);
+    let hint = if st.highlight().is_some_and(|(_, high)| high) {
+        "↑ = la fila de arriba (Q W E R T Y U)"
+    } else {
+        "Pulsa la tecla que brilla · Intro: desde el principio"
+    };
+    c.text(
+        430.0,
+        270.0,
+        Align2::CENTER_CENTER,
+        hint,
+        13.0,
+        NEON_CIAN.gamma_multiply(0.7),
+    );
+}
 
 /// Juego de oído.
 fn game_view(c: &Canvas, g: &crate::state::EarGame, extra: &Extra) {
@@ -1004,6 +1122,19 @@ fn chord_buttons(c: &Canvas, st: &State) {
         let (x, y, w, h) = (r.min.x, r.min.y - lift, r.width(), r.height());
         if pressed {
             c.rect(x - 6.0, y - 6.0, w + 12.0, h + 12.0, 26.0, BLANCO);
+        }
+        if let Some((hb, _)) = st.highlight()
+            && hb as usize == b
+        {
+            let t = (c.painter.ctx().input(|i| i.time) * 5.0).sin() as f32 * 0.5 + 0.5;
+            c.rect(
+                x - 8.0,
+                y - 8.0,
+                w + 16.0,
+                h + 16.0,
+                28.0,
+                NEON_AMARILLO.gamma_multiply(0.5 + 0.5 * t),
+            );
         }
         c.rect(x, y, w, h, 22.0, col.gamma_multiply(0.75));
         c.rect(x + 4.0, y + 4.0, w - 8.0, h - 10.0, 18.0, col);
