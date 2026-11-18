@@ -96,8 +96,8 @@ impl<'a> Canvas<'a> {
 
 /// Zonas pulsables con el ratón o el dedo.
 pub fn chord_button_rect(b: usize) -> Rect {
-    let x = 36.0 + b as f32 * 130.0;
-    Rect::from_min_size(Pos2::new(x, 390.0), Vec2::new(120.0, 126.0))
+    let x = 16.0 + b as f32 * 133.0;
+    Rect::from_min_size(Pos2::new(x, 392.0), Vec2::new(129.0, 132.0))
 }
 
 /// Información extra para la pantalla.
@@ -134,18 +134,7 @@ pub struct SongsView<'a> {
 }
 
 pub fn draw(c: &Canvas, st: &State, extra: &Extra) {
-    // Carcasa.
-    c.painter.rect_filled(c.painter.clip_rect(), 0.0, NARANJA);
-    c.rect(12.0, 12.0, 936.0, 516.0, 36.0, AMARILLO);
-    c.rect(12.0, 12.0, 936.0, 258.0, 36.0, AMARILLO_CLARO);
-    c.rect(
-        12.0,
-        200.0,
-        936.0,
-        120.0,
-        0.0,
-        AMARILLO_CLARO.lerp_to_gamma(AMARILLO, 0.5),
-    );
+    c.painter.rect_filled(c.painter.clip_rect(), 0.0, FONDO);
 
     if st.screen == Screen::Canciones {
         songs_screen(c, st, extra);
@@ -153,139 +142,191 @@ pub fn draw(c: &Canvas, st: &State, extra: &Extra) {
         taller_screen(c, st, extra);
     } else {
         top_bar(c, st);
-        menu_buttons(c, st);
+        sidebar(c, st);
         screen(c, st, extra);
-        joystick(c, st);
+        mando_panel(c, st);
         chord_buttons(c, st);
     }
     if let Some(t) = st.toast_text() {
-        let w = 40.0 + t.chars().count() as f32 * 11.0;
-        c.rect(480.0 - w / 2.0, 76.0, w, 40.0, 20.0, hex(0x2ED573));
-        c.rect_stroke(480.0 - w / 2.0, 76.0, w, 40.0, 20.0, 3.0, BLANCO);
-        c.text(480.0, 96.0, Align2::CENTER_CENTER, t, 19.0, BLANCO);
+        let w = 40.0 + t.chars().count() as f32 * 9.5;
+        c.rect(480.0 - w / 2.0, 72.0, w, 36.0, 10.0, PANEL_2);
+        c.rect_stroke(480.0 - w / 2.0, 72.0, w, 36.0, 10.0, 1.5, ACENTO);
+        c.text(480.0, 90.0, Align2::CENTER_CENTER, t, 16.0, TEXTO);
     }
 
     if !extra.status.is_empty() {
         c.text(
-            940.0,
-            534.0,
+            948.0,
+            536.0,
             Align2::RIGHT_BOTTOM,
             extra.status,
             9.0,
-            MARRON.gamma_multiply(0.6),
+            TEXTO_2.gamma_multiply(0.7),
         );
     }
 }
 
-fn pill(c: &Canvas, x: f32, w: f32, fill: Color32, text: &str, tc: Color32) {
-    c.rect(x, 30.0, w, 40.0, 20.0, fill);
-    c.text(x + w / 2.0, 50.0, Align2::CENTER_CENTER, text, 19.0, tc);
-}
-
+/// Barra de arriba: modo, pantallita LCD con tempo, tono y sonido, y transporte.
 fn top_bar(c: &Canvas, st: &State) {
-    pill(c, 36.0, 150.0, MENU_ROJO, st.play_mode.badge(), BLANCO);
+    c.rect(0.0, 0.0, W, 62.0, 0.0, PANEL);
+    c.line(&[(0.0, 62.0), (W, 62.0)], 1.0, BORDE);
 
-    let oct = format!("{:+}", st.key.octave).replace("+0", "0");
-    let tono = if st.show_names {
-        format!("{} · oct {oct}", st.key.name())
-    } else {
-        format!("   {} · oct {oct}", st.key.scale.name())
-    };
-    pill(c, 196.0, 200.0, MENU_GRIS, &tono, BLANCO);
-    if !st.show_names {
-        c.circle(
-            216.0,
-            50.0,
-            11.0,
-            if st.note_colors {
-                note_color(st.key.tonic)
-            } else {
-                color_tonalidad(st.key.tonic)
-            },
-        );
-        c.ring(216.0, 50.0, 11.0, 2.0, BLANCO);
-    }
-
-    let s = &SOUNDS[st.sound];
-    c.rect(406.0, 30.0, 200.0, 40.0, 20.0, MENU_AMARILLO);
-    c.rect_stroke(406.0, 30.0, 200.0, 40.0, 20.0, 3.0, hex(0xE0A800));
+    // Modo.
+    c.rect(16.0, 14.0, 168.0, 34.0, 8.0, PANEL_2);
+    c.rect(16.0, 14.0, 5.0, 34.0, 2.0, MENU_ROJO);
     c.text(
-        506.0,
-        50.0,
-        Align2::CENTER_CENTER,
-        if st.effect == mapach_dsp::effects::Effect::Ninguno {
-            format!("{} {}", s.icon, s.name)
-        } else {
-            format!("{} {} · {}", s.icon, s.name, st.effect.icon())
-        },
-        19.0,
-        MARRON,
+        34.0,
+        31.0,
+        Align2::LEFT_CENTER,
+        st.play_mode.badge(),
+        15.0,
+        TEXTO,
     );
 
-    pill(
-        c,
-        616.0,
-        120.0,
-        BLANCO,
-        &format!("♩ {:.0} BPM", st.bpm),
-        NARANJA,
-    );
-
-    // Volumen: 8 segmentos.
-    c.rect(746.0, 34.0, 178.0, 32.0, 16.0, hex(0xE8A600));
-    let lit = if st.muted {
-        0
-    } else {
-        (st.volume * 8.0).round() as usize
-    };
-    for i in 0..8 {
-        let col = match i {
-            _ if i >= lit => hex(0xF5DFA0),
-            0..=3 => hex(0x2ED573),
-            4..=5 => hex(0xFFD400),
-            _ => hex(0xFF8A00),
-        };
-        c.rect(754.0 + i as f32 * 15.0, 40.0, 12.0, 20.0, 4.0, col);
+    // LCD.
+    let (x0, x1) = (250.0, 710.0);
+    c.rect(x0, 8.0, x1 - x0, 46.0, 8.0, LCD);
+    c.rect_stroke(x0, 8.0, x1 - x0, 46.0, 8.0, 1.0, BORDE);
+    let cells = [x0, 360.0, 530.0, x1];
+    for &x in &cells[1..3] {
+        c.line(&[(x, 14.0), (x, 48.0)], 1.0, BORDE);
     }
-    let vol = if st.muted { "🔇" } else { "VOL" };
-    c.text(898.0, 50.0, Align2::CENTER_CENTER, vol, 13.0, MARRON);
+    let label = |x: f32, t: &str| c.text(x, 17.0, Align2::CENTER_TOP, t, 9.0, TEXTO_2);
+    label((cells[0] + cells[1]) / 2.0, "TEMPO");
+    label((cells[1] + cells[2]) / 2.0, "TONO");
+    label((cells[2] + cells[3]) / 2.0, "SONIDO");
+    c.text(
+        (cells[0] + cells[1]) / 2.0,
+        39.0,
+        Align2::CENTER_CENTER,
+        format!("{:.0}", st.bpm),
+        20.0,
+        TEXTO,
+    );
+    let oct = match st.key.octave {
+        0 => String::new(),
+        o => format!(" · {o:+}"),
+    };
+    let tono = if st.show_names {
+        format!("{}{oct}", st.key.name())
+    } else {
+        format!("   {}{oct}", st.key.scale.name())
+    };
+    let cx = (cells[1] + cells[2]) / 2.0;
+    c.text(cx, 39.0, Align2::CENTER_CENTER, &tono, 15.0, TEXTO);
+    if !st.show_names {
+        let w = tono.chars().count() as f32 * 7.6;
+        let dot = if st.note_colors {
+            note_color(st.key.tonic)
+        } else {
+            color_tonalidad(st.key.tonic)
+        };
+        c.circle(cx - w / 2.0 + 4.0, 39.0, 6.0, dot);
+    }
+    let snd = &SOUNDS[st.sound];
+    let sonido = if st.effect == mapach_dsp::effects::Effect::Ninguno {
+        format!("{} {}", snd.icon, snd.name)
+    } else {
+        format!("{} {} · {}", snd.icon, snd.name, st.effect.icon())
+    };
+    c.text(
+        (cells[2] + cells[3]) / 2.0,
+        39.0,
+        Align2::CENTER_CENTER,
+        sonido,
+        15.0,
+        TEXTO,
+    );
+
+    // Transporte: grabar y play.
+    let rec = st.looper.recording.is_some();
+    c.circle(746.0, 31.0, 15.0, if rec { MENU_ROJO } else { PANEL_2 });
+    c.circle(746.0, 31.0, 6.0, if rec { BLANCO } else { MENU_ROJO });
+    let playing = st.looper.playing || st.drums_playing;
+    c.circle(784.0, 31.0, 15.0, if playing { VERDE } else { PANEL_2 });
+    c.text(
+        785.0,
+        31.0,
+        Align2::CENTER_CENTER,
+        "▶",
+        13.0,
+        if playing { TEXTO_OSCURO } else { TEXTO },
+    );
+
+    // Volumen: barra fina.
+    c.text(
+        816.0,
+        31.0,
+        Align2::LEFT_CENTER,
+        if st.muted { "🔇" } else { "🔊" },
+        14.0,
+        TEXTO_2,
+    );
+    c.rect(840.0, 28.0, 100.0, 6.0, 3.0, PANEL_2);
+    if !st.muted {
+        c.rect(840.0, 28.0, 100.0 * st.volume, 6.0, 3.0, TEXTO);
+    }
 }
 
-fn menu_buttons(c: &Canvas, st: &State) {
+/// Columna de la izquierda: los tres menús, como una biblioteca.
+fn sidebar(c: &Canvas, st: &State) {
     let held = st.menu_held();
     let open = st.open_menu.map(|o| o.menu);
-    for (i, (m, letter, label, col, tc)) in [
-        (Menu::Tono, "Z", "Tono", MENU_GRIS, BLANCO),
-        (Menu::Sonido, "X", "Sonido", MENU_AMARILLO, MARRON),
-        (Menu::Modo, "C", "Modo", MENU_ROJO, BLANCO),
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let y = 140.0 + i as f32 * 90.0;
+    let snd = &SOUNDS[st.sound];
+    let tono = if st.show_names {
+        st.key.name()
+    } else {
+        st.key.scale.name().to_string()
+    };
+    let rows = [
+        (Menu::Tono, "TONO", MENU_GRIS, tono),
+        (Menu::Sonido, "SONIDO", MENU_AMARILLO, snd.name.to_string()),
+        (
+            Menu::Modo,
+            "MODO",
+            MENU_ROJO,
+            st.play_mode.name().to_string(),
+        ),
+    ];
+    for (i, (m, label, col, value)) in rows.into_iter().enumerate() {
+        let y = 76.0 + i as f32 * 98.0;
         let active = held == Some(m) || open == Some(m);
-        let r = if active { 42.0 } else { 38.0 };
-        c.circle(80.0, y, r + 4.0, col.gamma_multiply(0.7));
-        c.circle(80.0, y, r, col);
+        c.rect(
+            12.0,
+            y,
+            124.0,
+            90.0,
+            10.0,
+            if active { PANEL_2 } else { PANEL },
+        );
         if active {
-            c.ring(80.0, y, r + 4.0, 4.0, BLANCO);
+            c.rect_stroke(12.0, y, 124.0, 90.0, 10.0, 1.5, ACENTO);
         }
-        c.text(80.0, y - 10.0, Align2::CENTER_CENTER, letter, 22.0, tc);
-        c.text(80.0, y + 14.0, Align2::CENTER_CENTER, label, 15.0, tc);
+        // El color de su tecla en el mando.
+        c.rect(24.0, y + 14.0, 16.0, 16.0, 4.0, col);
+        c.text(48.0, y + 22.0, Align2::LEFT_CENTER, label, 11.0, TEXTO_2);
+        let size = if value.chars().count() > 12 {
+            13.0
+        } else {
+            16.0
+        };
+        c.text(24.0, y + 54.0, Align2::LEFT_CENTER, value, size, TEXTO);
     }
 }
 
 /// Pantalla "OLED" central.
 fn screen(c: &Canvas, st: &State, extra: &Extra) {
-    c.rect(146.0, 86.0, 568.0, 278.0, 28.0, NARANJA);
-    c.rect(154.0, 94.0, 552.0, 262.0, 22.0, OLED);
+    c.rect(146.0, 76.0, 568.0, 286.0, 10.0, OLED);
+    c.rect_stroke(146.0, 76.0, 568.0, 286.0, 10.0, 1.0, BORDE);
 
     let menu = st
         .menu_held()
         .map(|m| (m, None))
         .or(st.open_menu.map(|o| (o.menu, Some(o.item))));
     if let Some((m, sel)) = menu {
+        // Los menús usan toda la pantalla (sin piano ni osciloscopio).
         menu_page(c, st, m, sel);
+        return;
     } else if let Some(g) = &st.game {
         game_view(c, g, extra, st);
         stars_line(c, st);
@@ -336,29 +377,22 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
         };
         c.text(430.0, 235.0, Align2::CENTER_CENTER, color, 22.0, NEON_CIAN);
     } else {
+        c.text(430.0, 150.0, Align2::CENTER_CENTER, "🦝", 54.0, TEXTO);
         c.text(
             430.0,
-            140.0,
+            214.0,
             Align2::CENTER_CENTER,
-            "🦝",
-            64.0,
-            NEON_AMARILLO,
+            "Toca una tecla de color",
+            24.0,
+            TEXTO,
         );
         c.text(
             430.0,
-            215.0,
+            244.0,
             Align2::CENTER_CENTER,
-            "Pulsa  A S D F G H J",
-            30.0,
-            NEON_AMARILLO,
-        );
-        c.text(
-            430.0,
-            248.0,
-            Align2::CENTER_CENTER,
-            "Z tono · X sonido · C modo",
-            18.0,
-            NEON_CIAN,
+            "Gris: tono · Amarillo: sonido · Rojo: modo · Rueda: elegir",
+            14.0,
+            TEXTO_2,
         );
     }
 
@@ -400,7 +434,7 @@ fn looper_view(c: &Canvas, st: &State, extra: &Extra) {
         690.0,
         112.0,
         Align2::RIGHT_CENTER,
-        "1–6 pista · Espacio grabar · Intro ▶",
+        "▶ + rueda: pista · ● grabar · ▶ seguir/parar",
         13.0,
         NEON_CIAN.gamma_multiply(0.7),
     );
@@ -470,7 +504,7 @@ fn looper_view(c: &Canvas, st: &State, extra: &Extra) {
                     (x0 + x1) / 2.0,
                     y,
                     Align2::CENTER_CENTER,
-                    "vacía · Espacio para grabar",
+                    "vacía · ● para grabar",
                     13.0,
                     NEON_CIAN.gamma_multiply(0.6),
                 );
@@ -640,32 +674,32 @@ fn menu_page(c: &Canvas, st: &State, m: Menu, sel: Option<usize>) {
         // Menú mantenido: chuleta de combinaciones.
         let tips: &[&str] = match m {
             Menu::Tono => &[
-                "← →  tonalidad",
-                "↑ ↓  octava",
-                "Espacio  🎲 al azar",
-                "Suelta para ver más",
+                "Gira la rueda: tonalidad",
+                "← →  tonalidad   ·   ↑ ↓  octava",
+                "Grabar: 🎲 al azar",
+                "Suelta para ver todo",
             ],
             Menu::Sonido => &[
-                "← →  sonido",
-                "↑ ↓  efecto",
-                "Espacio  🎲 al azar",
-                "Suelta para ver más",
+                "Gira la rueda: sonido",
+                "← →  sonido   ·   ↑ ↓  efecto",
+                "Grabar: 🎲 al azar",
+                "Suelta para ver todo",
             ],
             Menu::Modo => &[
-                "← →  modo",
-                "↑ ↓  tempo",
-                "Espacio  🎲 al azar",
-                "Suelta para ver más",
+                "Gira la rueda: modo",
+                "← →  modo   ·   ↑ ↓  tempo",
+                "Grabar: 🎲 al azar",
+                "Suelta para ver todo",
             ],
         };
         for (i, t) in tips.iter().enumerate() {
             c.text(
                 430.0,
-                160.0 + i as f32 * 32.0,
+                170.0 + i as f32 * 36.0,
                 Align2::CENTER_CENTER,
                 t,
-                22.0,
-                NEON_CIAN,
+                if i == 0 { 22.0 } else { 17.0 },
+                if i == 0 { TEXTO } else { TEXTO_2 },
             );
         }
         let big = match m {
@@ -680,29 +714,41 @@ fn menu_page(c: &Canvas, st: &State, m: Menu, sel: Option<usize>) {
     let items = st.items(m);
     let sel = sel.min(items.len().saturating_sub(1));
     for (i, &item) in items.iter().enumerate() {
-        let y = 156.0 + i as f32 * 28.0;
+        let y = 156.0 + i as f32 * 26.0;
         let on = i == sel;
+        let editing = on && st.menu_edit;
         if on {
-            c.rect(174.0, y - 13.0, 512.0, 26.0, 13.0, OLED_APAGADO);
+            c.rect(
+                170.0,
+                y - 12.0,
+                520.0,
+                24.0,
+                6.0,
+                if editing {
+                    ACENTO.gamma_multiply(0.25)
+                } else {
+                    OLED_APAGADO
+                },
+            );
         }
-        let tc = if on {
-            NEON_AMARILLO
+        let tc = if editing {
+            ACENTO
+        } else if on {
+            TEXTO
         } else {
-            NEON_CIAN.gamma_multiply(0.7)
+            TEXTO_2
         };
-        c.text(190.0, y, Align2::LEFT_CENTER, item.label(), 19.0, tc);
+        c.text(186.0, y, Align2::LEFT_CENTER, item.label(), 16.0, tc);
         let v = value_text(st, item);
-        let v = if on { format!("◀  {v}  ▶") } else { v };
-        c.text(670.0, y, Align2::RIGHT_CENTER, v, 19.0, tc);
+        let v = if editing { format!("◀  {v}  ▶") } else { v };
+        c.text(674.0, y, Align2::RIGHT_CENTER, v, 16.0, tc);
     }
-    c.text(
-        430.0,
-        124.0,
-        Align2::LEFT_CENTER,
-        "↑↓ elegir · ←→ cambiar",
-        13.0,
-        NEON_CIAN.gamma_multiply(0.6),
-    );
+    let hint = if st.menu_edit {
+        "Rueda: cambiar · Play: listo"
+    } else {
+        "Rueda: elegir · Play: cambiar"
+    };
+    c.text(686.0, 121.0, Align2::RIGHT_CENTER, hint, 13.0, TEXTO_2);
 }
 
 fn value_text(st: &State, item: Item) -> String {
@@ -773,69 +819,97 @@ pub fn dir_label(mode: ModifierMode, d: Direction) -> &'static str {
     }
 }
 
-/// Rueda de flechas (joystick).
-fn joystick(c: &Canvas, st: &State) {
-    let (cx, cy) = (830.0, 215.0);
-    c.circle(cx, cy, 94.0, NARANJA);
-    c.circle(cx, cy, 88.0, hex(0xFFF1C9));
-    let active = st.current.as_ref().and_then(|s| s.dir);
-    let arrows = [
-        (Direction::Up, 0.0, -1.0),
-        (Direction::UpRight, 0.72, -0.72),
-        (Direction::Right, 1.0, 0.0),
-        (Direction::DownRight, 0.72, 0.72),
-        (Direction::Down, 0.0, 1.0),
-        (Direction::DownLeft, -0.72, 0.72),
-        (Direction::Left, -1.0, 0.0),
-        (Direction::UpLeft, -0.72, -0.72),
-    ];
-    for (d, dx, dy) in arrows {
-        let (x, y) = (cx + dx * 62.0, cy + dy * 62.0);
-        let menu = st.open_menu.is_some() || st.menu_held().is_some();
-        let on =
-            !menu && (active == Some(d) || (st.current.is_none() && st.arrow_dir() == Some(d)));
-        if on {
-            c.circle(
-                x,
-                y,
-                22.0,
-                button_color(st, st.current.as_ref().map_or(0, |s| s.button)),
-            );
-        }
-        let label = format!("{}\n{}", d.arrow(), dir_label(st.mod_mode, d));
+/// Dibujo del mando (16 teclas y 3 perillas), con lo que hace cada cosa ahora.
+fn mando_panel(c: &Canvas, st: &State) {
+    c.rect(726.0, 76.0, 222.0, 286.0, 10.0, PANEL);
+    c.text(740.0, 90.0, Align2::LEFT_CENTER, "MANDO", 11.0, TEXTO_2);
+    // Cuerpo.
+    let (bx, by, bw, bh) = (742.0, 104.0, 190.0, 246.0);
+    c.rect(bx, by, bw, bh, 14.0, PANEL_2);
+    c.rect_stroke(bx, by, bw, bh, 14.0, 1.0, BORDE);
+
+    // Perillas: volumen, tempo y la rueda grande.
+    let knob = |x: f32, r: f32, label: &str, active: bool| {
+        c.circle(x, 132.0, r + 2.0, BORDE);
+        c.circle(x, 132.0, r, hex(0x1E1E22));
+        c.line(&[(x, 132.0 - r + 3.0), (x, 132.0 - r * 0.45)], 2.0, TEXTO_2);
         c.text(
             x,
-            y,
+            132.0 + r + 9.0,
             Align2::CENTER_CENTER,
             label,
-            12.0,
-            if on { BLANCO } else { MARRON },
+            10.0,
+            if active { ACENTO } else { TEXTO_2 },
+        );
+    };
+    knob(
+        770.0,
+        12.0,
+        if st.muted { "silencio" } else { "volumen" },
+        false,
+    );
+    knob(818.0, 12.0, &format!("{:.0} bpm", st.bpm), false);
+    knob(890.0, 22.0, st.cursor_role(), true);
+
+    // Teclas: 4 × 4.
+    let held_menu = st.menu_held();
+    let (kx, ky, ks, gap) = (754.0, 176.0, 38.0, 4.0);
+    for n in 0..16usize {
+        let (row, col) = (n / 4, n % 4);
+        let x = kx + col as f32 * (ks + gap);
+        let y = ky + row as f32 * (ks + gap);
+        let dark = hex(0x1E1E22);
+        let (fill, glyph, pressed): (Color32, String, bool) = match n {
+            0..=6 => (
+                button_color(st, n as u8),
+                (n + 1).to_string(),
+                st.chord_held(n as u8),
+            ),
+            7 => (
+                dark,
+                "●".into(),
+                st.record_pressed() || st.looper.recording.is_some(),
+            ),
+            8 => (dark, "←".into(), st.arrow_held(Arrow::Left)),
+            9 => (dark, "↑".into(), st.arrow_held(Arrow::Up)),
+            10 => (dark, "↓".into(), st.arrow_held(Arrow::Down)),
+            11 => (dark, "→".into(), st.arrow_held(Arrow::Right)),
+            12 => (MENU_GRIS, String::new(), held_menu == Some(Menu::Tono)),
+            13 => (
+                MENU_AMARILLO,
+                String::new(),
+                held_menu == Some(Menu::Sonido),
+            ),
+            14 => (MENU_ROJO, String::new(), held_menu == Some(Menu::Modo)),
+            _ => (dark, "▶".into(), st.play_pressed()),
+        };
+        let fill = if pressed {
+            fill.lerp_to_gamma(BLANCO, 0.35)
+        } else {
+            fill
+        };
+        c.rect(x, y, ks, ks, 6.0, fill);
+        if pressed {
+            c.rect_stroke(x - 2.0, y - 2.0, ks + 4.0, ks + 4.0, 7.0, 2.0, BLANCO);
+        }
+        let tc = if n == 7 {
+            MENU_ROJO
+        } else if !(7..12).contains(&n) {
+            texto_sobre(fill)
+        } else {
+            TEXTO
+        };
+        c.text(
+            x + ks / 2.0,
+            y + ks / 2.0,
+            Align2::CENTER_CENTER,
+            glyph,
+            14.0,
+            tc,
         );
     }
-    let held = [Arrow::Up, Arrow::Down, Arrow::Left, Arrow::Right]
-        .iter()
-        .any(|&a| st.arrow_held(a));
-    c.circle(cx, cy, 26.0, if held { MENU_ROJO } else { NARANJA });
-    c.text(cx, cy, Align2::CENTER_CENTER, "flechas", 11.0, BLANCO);
-    c.text(
-        cx,
-        330.0,
-        Align2::CENTER_CENTER,
-        "Mantén un acorde",
-        15.0,
-        MARRON,
-    );
-    c.text(
-        cx,
-        349.0,
-        Align2::CENTER_CENTER,
-        "y pulsa una flecha",
-        15.0,
-        MARRON,
-    );
 }
 
-const LETRAS: [&str; 7] = ["A", "S", "D", "F", "G", "H", "J"];
 const ROMANOS: [&str; 7] = ["I", "ii", "iii", "IV", "V", "vi", "vii"];
 
 /// Color de una tecla de acorde: arcoíris por tecla o, si se ha elegido, por nota.
@@ -950,7 +1024,7 @@ fn follow_view(c: &Canvas, f: &crate::state::Follow, st: &State) {
     let hint = if st.highlight().is_some_and(|(_, high)| high) {
         "↑ = la fila de arriba (Q W E R T Y U)"
     } else {
-        "Pulsa la tecla que brilla · Intro: desde el principio"
+        "Pulsa la tecla que brilla · ▶ desde el principio"
     };
     c.text(
         430.0,
@@ -1025,7 +1099,7 @@ fn game_view(c: &Canvas, g: &crate::state::EarGame, extra: &Extra, st: &State) {
         430.0,
         276.0,
         Align2::CENTER_CENTER,
-        "Intro: otra vez · perilla o menú: salir",
+        "▶ otra vez · un botón de color: salir",
         13.0,
         NEON_CIAN.gamma_multiply(0.7),
     );
@@ -1079,9 +1153,9 @@ fn drums_view(c: &Canvas, st: &State, extra: &Extra) {
         }
         _ => {
             let hint = if st.drums_playing {
-                "■ Intro para parar"
+                "■ Play para parar"
             } else {
-                "▶ Intro para empezar"
+                "▶ Play para empezar"
             };
             c.text(430.0, 180.0, Align2::CENTER_CENTER, hint, 22.0, NEON_CIAN);
         }
@@ -1102,6 +1176,25 @@ fn drums_view(c: &Canvas, st: &State, extra: &Extra) {
 /// Rejilla del secuenciador: 7 instrumentos × 16 pasos.
 fn sequencer_view(c: &Canvas, st: &State, extra: &Extra) {
     let (x0, y0, cw, rh) = (232.0, 104.0, 26.0, 32.0);
+    if st.seq_row == crate::state::SEQ_EXIT {
+        c.text(
+            430.0,
+            200.0,
+            Align2::CENTER_CENTER,
+            "◀ Salir: pulsa cualquier tecla",
+            24.0,
+            ACENTO,
+        );
+        c.text(
+            430.0,
+            236.0,
+            Align2::CENTER_CENTER,
+            "Tu ritmo sigue sonando en Ritmos › Mi ritmo",
+            15.0,
+            TEXTO_2,
+        );
+        return;
+    }
     for (r, d) in Drum::ALL.iter().enumerate() {
         let y = y0 + r as f32 * rh;
         let sel = r == st.seq_row;
@@ -1130,53 +1223,62 @@ fn sequencer_view(c: &Canvas, st: &State, extra: &Extra) {
         430.0,
         352.0,
         Align2::CENTER_BOTTOM,
-        "1–8 y Q–I encienden pasos · ↑↓ instrumento · Intro ▶",
+        "Las 16 teclas del mando encienden pasos · Rueda: instrumento",
         13.0,
         NEON_CIAN.gamma_multiply(0.7),
     );
 }
 
 fn chord_buttons(c: &Canvas, st: &State) {
+    c.rect(0.0, 374.0, W, 166.0, 0.0, PANEL);
+    c.line(&[(0.0, 374.0), (W, 374.0)], 1.0, BORDE);
+    let drums = matches!(st.play_mode, PlayMode::Bateria | PlayMode::Secuencia);
     for b in 0..7usize {
         let r = chord_button_rect(b);
-        let col = if matches!(st.play_mode, PlayMode::Bateria | PlayMode::Secuencia) {
+        let col = if drums {
             ACORDES[b]
         } else {
             button_color(st, b as u8)
         };
         let pressed = st.chord_held(b as u8);
-        let lift = if pressed { 6.0 } else { 0.0 };
-        let (x, y, w, h) = (r.min.x, r.min.y - lift, r.width(), r.height());
-        if pressed {
-            c.rect(x - 6.0, y - 6.0, w + 12.0, h + 12.0, 26.0, BLANCO);
-        }
+        let (x, y, w, h) = (r.min.x, r.min.y, r.width(), r.height());
         if let Some((hb, _)) = st.highlight()
             && hb as usize == b
         {
             let t = (c.painter.ctx().input(|i| i.time) * 5.0).sin() as f32 * 0.5 + 0.5;
-            let grow = 8.0 + 4.0 * t;
+            let grow = 5.0 + 3.0 * t;
             c.rect(
                 x - grow,
                 y - grow,
                 w + grow * 2.0,
                 h + grow * 2.0,
-                30.0,
-                NEON_AMARILLO.gamma_multiply(0.7 + 0.3 * t),
+                14.0,
+                ACENTO.gamma_multiply(0.6 + 0.4 * t),
             );
             c.text(
                 x + w / 2.0,
-                y - grow - 10.0,
+                y - grow - 4.0,
                 Align2::CENTER_BOTTOM,
-                "⬇",
-                22.0,
-                MENU_ROJO,
+                "▼",
+                14.0,
+                ACENTO,
             );
         }
-        c.rect(x, y, w, h, 22.0, col.gamma_multiply(0.75));
-        c.rect(x + 4.0, y + 4.0, w - 8.0, h - 10.0, 18.0, col);
-        let tc = texto_sobre(col);
+        // Pad plano.
+        let base = if pressed {
+            col.lerp_to_gamma(BLANCO, 0.25)
+        } else {
+            col.gamma_multiply(0.82)
+        };
+        // Sombra abajo y el pad liso encima.
+        c.rect(x, y + 4.0, w, h - 4.0, 10.0, base.gamma_multiply(0.7));
+        c.rect(x, y, w, h - 4.0, 10.0, base);
+        if pressed {
+            c.rect_stroke(x - 2.0, y - 2.0, w + 4.0, h + 4.0, 12.0, 2.0, BLANCO);
+        }
+        let tc = texto_sobre(base);
         let cx = x + w / 2.0;
-        if matches!(st.play_mode, PlayMode::Bateria | PlayMode::Secuencia) {
+        if drums {
             let d = Drum::ALL[b];
             let custom = st.drum_samples[b].as_deref().map(|p| {
                 std::path::Path::new(p)
@@ -1188,45 +1290,36 @@ fn chord_buttons(c: &Canvas, st: &State) {
                 Some(n) => ("🎤", n.as_str()),
                 None => (d.icon(), d.name()),
             };
-            c.text(cx, y + 42.0, Align2::CENTER_CENTER, icon, 38.0, tc);
-            let size = if name.chars().count() > 8 { 13.0 } else { 17.0 };
-            c.text(cx, y + 80.0, Align2::CENTER_CENTER, name, size, tc);
+            c.text(cx, y + 50.0, Align2::CENTER_CENTER, icon, 34.0, tc);
+            let size = if name.chars().count() > 8 { 12.0 } else { 15.0 };
+            c.text(cx, y + 100.0, Align2::CENTER_CENTER, name, size, tc);
         } else if st.play_mode == PlayMode::Melodia {
-            c.text(cx, y + 48.0, Align2::CENTER_CENTER, "♪", 40.0, tc);
+            c.text(cx, y + 60.0, Align2::CENTER_CENTER, "♪", 38.0, tc);
         } else if st.show_names {
             let name = st.chord_for(b as u8, false).name();
-            let size = if name.chars().count() > 5 { 24.0 } else { 34.0 };
-            c.text(cx, y + 42.0, Align2::CENTER_CENTER, name, size, tc);
+            let size = if name.chars().count() > 5 { 22.0 } else { 30.0 };
+            c.text(cx, y + 56.0, Align2::CENTER_CENTER, name, size, tc);
             c.text(
                 cx,
-                y + 78.0,
+                y + 98.0,
                 Align2::CENTER_CENTER,
                 ROMANOS[b],
-                18.0,
+                15.0,
                 tc.gamma_multiply(0.8),
             );
         } else {
-            c.text(cx, y + 52.0, Align2::CENTER_CENTER, b + 1, 52.0, tc);
+            c.text(cx, y + 64.0, Align2::CENTER_CENTER, b + 1, 44.0, tc);
         }
-        if st.locks[b].is_some() && !matches!(st.play_mode, PlayMode::Bateria | PlayMode::Secuencia)
-        {
+        if st.locks[b].is_some() && !drums {
             c.text(
-                x + w - 18.0,
-                y + 18.0,
+                x + w - 16.0,
+                y + 16.0,
                 Align2::CENTER_CENTER,
                 "🔒",
-                14.0,
+                13.0,
                 tc,
             );
         }
-        c.text(
-            cx,
-            y + 104.0,
-            Align2::CENTER_CENTER,
-            format!("[{}]", LETRAS[b]),
-            17.0,
-            tc.gamma_multiply(0.8),
-        );
     }
 }
 
@@ -1234,17 +1327,17 @@ fn rgb(c: [u8; 3]) -> Color32 {
     Color32::from_rgb(c[0], c[1], c[2])
 }
 
+/// Cabecera de las pantallas de canciones y taller, como la barra de arriba.
+fn screen_header(c: &Canvas, title: &str, accent: Color32) {
+    c.rect(0.0, 0.0, W, 84.0, 0.0, PANEL);
+    c.line(&[(0.0, 84.0), (W, 84.0)], 1.0, BORDE);
+    c.rect(24.0, 30.0, 5.0, 26.0, 2.0, accent);
+    c.text(40.0, 43.0, Align2::LEFT_CENTER, title, 22.0, TEXTO);
+}
+
 /// Pantalla "Mis canciones" (boceto 05-canciones-exportar.svg).
 fn songs_screen(c: &Canvas, st: &State, extra: &Extra) {
-    c.rect(36.0, 30.0, 300.0, 48.0, 24.0, hex(0x1EC8FF));
-    c.text(
-        186.0,
-        54.0,
-        Align2::CENTER_CENTER,
-        "♫ MIS CANCIONES",
-        24.0,
-        BLANCO,
-    );
+    screen_header(c, "♫  Mis canciones", hex(0x1EC8FF));
     let Some(sv) = &extra.songs else {
         c.text(
             480.0,
@@ -1264,20 +1357,21 @@ fn songs_screen(c: &Canvas, st: &State, extra: &Extra) {
         (None, None) => ("se guarda solo".to_string(), MENU_GRIS),
     };
     let w = 30.0 + txt.chars().count() as f32 * 9.5;
-    c.rect(348.0, 36.0, w, 36.0, 18.0, col);
+    // El estado del guardado, a la derecha de la cabecera; la ayuda, abajo.
+    c.rect(936.0 - w, 26.0, w, 32.0, 8.0, col);
     c.text(
-        348.0 + w / 2.0,
-        54.0,
+        936.0 - w / 2.0,
+        42.0,
         Align2::CENTER_CENTER,
         txt,
-        16.0,
+        15.0,
         BLANCO,
     );
     c.text(
-        924.0,
-        54.0,
-        Align2::RIGHT_CENTER,
-        "← → elegir · Espacio abrir · ↓ exportar · F5 salir",
+        36.0,
+        530.0,
+        Align2::LEFT_CENTER,
+        "Rueda: elegir · ▶: abrir o exportar · un botón de color: salir",
         14.0,
         MARRON,
     );
@@ -1300,12 +1394,12 @@ fn songs_screen(c: &Canvas, st: &State, extra: &Extra) {
         let (y, w, h) = (96.0, 210.0, 210.0);
         let sel = focus == Some(i);
         if sel {
-            c.rect(x - 6.0, y - 6.0, w + 12.0, h + 12.0, 30.0, BLANCO);
+            c.rect_stroke(x - 4.0, y - 4.0, w + 8.0, h + 8.0, 16.0, 2.5, ACENTO);
         }
         if i == sv.list.len() {
-            c.rect(x, y, w, h, 26.0, hex(0xFFD23F));
-            c.rect_stroke(x, y, w, h, 26.0, 4.0, NARANJA);
-            c.circle(x + w / 2.0, y + 80.0, 38.0, NARANJA);
+            c.rect(x, y, w, h, 12.0, PANEL);
+            c.rect_stroke(x, y, w, h, 12.0, 1.0, BORDE);
+            c.circle(x + w / 2.0, y + 80.0, 38.0, ACENTO);
             c.text(
                 x + w / 2.0,
                 y + 80.0,
@@ -1319,14 +1413,14 @@ fn songs_screen(c: &Canvas, st: &State, extra: &Extra) {
                 y + 160.0,
                 Align2::CENTER_CENTER,
                 "Nueva",
-                26.0,
-                NARANJA,
+                24.0,
+                ACENTO,
             );
             continue;
         }
         let song = &sv.list[i];
         let col = rgb(song.color);
-        c.rect(x, y, w, h, 26.0, col);
+        c.rect(x, y, w, h, 12.0, col);
         let tc = texto_sobre(col);
         c.text(
             x + w / 2.0,
@@ -1381,8 +1475,8 @@ fn songs_screen(c: &Canvas, st: &State, extra: &Extra) {
     }
 
     // Exportar.
-    c.rect(32.0, 326.0, 896.0, 188.0, 30.0, NARANJA);
-    c.rect(40.0, 334.0, 880.0, 172.0, 24.0, OLED);
+    c.rect(32.0, 326.0, 896.0, 188.0, 12.0, OLED);
+    c.rect_stroke(32.0, 326.0, 896.0, 188.0, 12.0, 1.0, BORDE);
     c.text(
         66.0,
         362.0,
@@ -1442,20 +1536,12 @@ fn songs_screen(c: &Canvas, st: &State, extra: &Extra) {
 /// Taller de samples (boceto 04-taller-samples.svg).
 fn taller_screen(c: &Canvas, st: &State, extra: &Extra) {
     use mapach_samples::destroy::Destroy;
-    c.rect(36.0, 30.0, 320.0, 48.0, 24.0, hex(0xB45CFF));
-    c.text(
-        196.0,
-        54.0,
-        Align2::CENTER_CENTER,
-        "🧪 TALLER DE SAMPLES",
-        22.0,
-        BLANCO,
-    );
+    screen_header(c, "🧪  Taller de samples", hex(0xB45CFF));
     c.text(
         924.0,
         54.0,
         Align2::RIGHT_CENTER,
-        "↑↓ elegir · Espacio grabar · Intro escuchar · Tab salir",
+        "↑↓ sonido · Rueda: botón · ▶ destrozar · ● grabar",
         14.0,
         MARRON,
     );
@@ -1470,14 +1556,14 @@ fn taller_screen(c: &Canvas, st: &State, extra: &Extra) {
         if i >= n {
             if i == n {
                 // Tarjeta de grabar.
-                c.rect_stroke(36.0, y, 230.0, 58.0, 18.0, 3.0, MENU_ROJO);
+                c.rect_stroke(36.0, y, 230.0, 58.0, 10.0, 1.5, MENU_ROJO);
                 c.circle(68.0, y + 29.0, 16.0, MENU_ROJO);
                 c.circle(68.0, y + 29.0, 7.0, BLANCO);
                 c.text(
                     96.0,
                     y + 29.0,
                     Align2::LEFT_CENTER,
-                    "Espacio: grabar",
+                    "● grabar voz",
                     17.0,
                     MENU_ROJO,
                 );
@@ -1488,9 +1574,9 @@ fn taller_screen(c: &Canvas, st: &State, extra: &Extra) {
         let col = rgb(e.color);
         let sel = i == st.sample_sel;
         if sel {
-            c.rect(31.0, y - 5.0, 240.0, 68.0, 22.0, BLANCO);
+            c.rect_stroke(32.0, y - 4.0, 238.0, 66.0, 12.0, 2.5, ACENTO);
         }
-        c.rect(36.0, y, 230.0, 58.0, 18.0, col);
+        c.rect(36.0, y, 230.0, 58.0, 10.0, col);
         let tc = texto_sobre(col);
         c.circle(64.0, y + 29.0, 16.0, BLANCO.gamma_multiply(0.35));
         c.text(65.0, y + 29.0, Align2::CENTER_CENTER, "▶", 15.0, tc);
@@ -1527,10 +1613,10 @@ fn taller_screen(c: &Canvas, st: &State, extra: &Extra) {
     }
 
     // Forma de onda.
-    c.rect(282.0, 92.0, 646.0, 250.0, 28.0, NARANJA);
-    c.rect(290.0, 100.0, 630.0, 234.0, 22.0, OLED);
+    c.rect(282.0, 96.0, 646.0, 242.0, 12.0, OLED);
+    c.rect_stroke(282.0, 96.0, 646.0, 242.0, 12.0, 1.0, BORDE);
     let title = if tv.recording {
-        format!("🔴 Grabando… {:.1} s (Espacio para parar)", tv.rec_seconds)
+        format!("🔴 Grabando… {:.1} s (● para parar)", tv.rec_seconds)
     } else {
         match (tv.list.get(st.sample_sel), tv.root) {
             (Some(e), Some(r)) if st.show_names => format!(
@@ -1572,7 +1658,7 @@ fn taller_screen(c: &Canvas, st: &State, extra: &Extra) {
         290.0,
         362.0,
         Align2::LEFT_CENTER,
-        "¡DESTRÓZALO!  Z aplicar · C deshacer · X acordes · X + tecla: batería",
+        "¡DESTRÓZALO!   Rueda: elegir · ▶ aplicar · amarillo + tecla: a la batería",
         17.0,
         MARRON,
     );
@@ -1617,9 +1703,9 @@ fn taller_screen(c: &Canvas, st: &State, extra: &Extra) {
     }
     // Leyenda de los botones de colores.
     for (i, (txt, col, tc)) in [
-        ("Z aplicar", MENU_GRIS, BLANCO),
-        ("X usar", MENU_AMARILLO, MARRON),
-        ("C deshacer", MENU_ROJO, BLANCO),
+        ("Salir", MENU_GRIS, BLANCO),
+        ("Usar en acordes", MENU_AMARILLO, TEXTO_OSCURO),
+        ("Deshacer", MENU_ROJO, BLANCO),
     ]
     .into_iter()
     .enumerate()

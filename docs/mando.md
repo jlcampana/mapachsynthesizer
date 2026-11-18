@@ -47,10 +47,26 @@ que es como lo hace el HiChord.
 
 ### Perillas
 
-Igual que en el HiChord: **si mantienes un botón de menú, la perilla cambia algo de ese menú.**
+| Perilla | Girar | Pulsar |
+|---|---|---|
+| **Izquierda · Volumen** | Volumen. Con Tono, Sonido o Modo pulsado: ataque, release o brillo | Silencio |
+| **Centro · Tempo** | BPM (40–300). Con Tono pulsado: octava; con Sonido: cantidad de efecto; con Modo: patrón o ritmo | Tap tempo (si el mando lo manda) |
+| **Derecha, la grande · Rueda-cursor** | Ver abajo | No hace falta: **Play** hace de botón central |
 
-| Perilla | Girar | + Tono | + Sonido | + Modo | Pulsar |
-|---|---|---|---|---|---|
+La **rueda grande funciona como la de un iPod**:
+
+- **Mantener un botón de abajo y girar** elige: Tono → tonalidad, Sonido → sonido, Modo → modo,
+  Play → pista del looper.
+- **En un menú abierto** (pulsar y soltar Tono, Sonido o Modo): girar mueve el cursor por las
+  opciones; **Play** entra a cambiar el valor (entonces girar lo cambia) y Play otra vez sale.
+- **Con un acorde pulsado**: recorre sus colores (normal → mayor/menor → 7ª → 7ª dominante → 9ª →
+  sus4 → disminuido → aumentado).
+- **En Canciones y en el Taller**: mueve la selección; Play elige (abrir, exportar o destrozar).
+- **En el secuenciador**: elige el instrumento.
+
+Play actúa al soltarlo, para poder combinarlo con la rueda sin que arranque el looper.
+
+---|---|---|---|---|---|
 | **P1 · Volumen** | Volumen | Attack | Release | **Filtro** (brillo) | Silencio |
 | **P2 · Mágica** | Con un acorde pulsado: va pasando por sus colores. Si no, navega | Tonalidad | Sonido | Modo | Con acorde: **fijarlo** (chord lock). Con menú: 🎲 aleatorio |
 | **P3 · Tempo** | BPM (40–300) | Octava | Cantidad de efecto | Patrón de arpegio o ritmo | Tap tempo |

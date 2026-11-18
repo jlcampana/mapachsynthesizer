@@ -1,10 +1,10 @@
 # Mapachsynthesizer 🦝🎹
 
-Sintetizador para niños, escrito en Rust, para Linux. Se toca con el teclado del ordenador
-y una perilla, y su interfaz de colores vivos está inspirada en el
+Sintetizador para niños, escrito en Rust, para Linux. Se toca con un mando de 16 teclas y 3
+perillas (o con el teclado del ordenador). La forma de tocar está inspirada en el
 [HiChord](https://updater.hichord.shop/manual/) y en el M-VAVE FM-1.
 
-![Pantalla principal](docs/bocetos/01-principal.svg)
+![Pantalla principal](docs/capturas/principal.png)
 
 Con él se puede:
 
@@ -19,7 +19,7 @@ Con él se puede:
 
 🎹 **Ya se puede tocar.** Están hechas las fases 0 a 9 del [plan](docs/plan.md#5-fases-y-entregables):
 
-- Los 7 acordes de colores con voice leading, las flechas y la perilla mágica para cambiarles el
+- Los 7 acordes de colores con voice leading, las flechas y la rueda grande para cambiarles el
   color, y la fila `Q`…`U` una octava más aguda.
 - Menús gris (tono), amarillo (sonido) y rojo (modo). Se abren al pulsar y soltar; si se mantienen,
   hacen atajos con las flechas y las perillas, y con `Espacio` ponen valores al azar 🎲.
@@ -62,9 +62,9 @@ sudo apt install libasound2-dev          # Ubuntu / Debian
 | `A S D F G H J` | Acordes (`Q`…`U`, una octava más aguda) |
 | Flechas | Mientras suena un acorde, cambian su color |
 | `Z` `X` `C` | Menús de tono, sonido y modo |
-| `RePág` / `AvPág` | Volumen (perilla 1) |
-| Rueda del ratón | Perilla mágica (2) |
-| `-` / `+` | Tempo (perilla 3) |
+| `RePág` / `AvPág` | Volumen (perilla de la izquierda) |
+| Rueda del ratón | Rueda grande del mando (cursor, como en un iPod) |
+| `-` / `+` | Tempo (perilla del centro) |
 | `B` | Tap tempo |
 | `Espacio` | Grabar en el looper (con un menú pulsado: 🎲 al azar) |
 | `1`–`6` | Elegir pista del looper (mantener: borrarla) |

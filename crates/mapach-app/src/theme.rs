@@ -6,19 +6,34 @@ pub const fn hex(c: u32) -> Color32 {
     Color32::from_rgb((c >> 16) as u8, (c >> 8) as u8, c as u8)
 }
 
-pub const AMARILLO: Color32 = hex(0xFFC21A);
-pub const AMARILLO_CLARO: Color32 = hex(0xFFD23F);
-pub const NARANJA: Color32 = hex(0xFF7A1A);
-pub const OLED: Color32 = hex(0x1C1230);
-pub const OLED_APAGADO: Color32 = hex(0x2E2248);
-pub const NEON_AMARILLO: Color32 = hex(0xFFE45C);
-pub const NEON_CIAN: Color32 = hex(0x4DF0FF);
-pub const NEON_ROSA: Color32 = hex(0xFF5CE1);
-pub const MENU_GRIS: Color32 = hex(0x8E8A99);
-pub const MENU_AMARILLO: Color32 = hex(0xFFE600);
-pub const MENU_ROJO: Color32 = hex(0xFF3B30);
-pub const MARRON: Color32 = hex(0x5A3A00);
+// Interfaz oscura y sobria, como un estudio de grabación (inspirada en GarageBand).
+pub const FONDO: Color32 = hex(0x1B1B1D);
+pub const PANEL: Color32 = hex(0x26262A);
+pub const PANEL_2: Color32 = hex(0x313136);
+pub const BORDE: Color32 = hex(0x3F3F46);
+pub const TEXTO: Color32 = hex(0xEDEDF0);
+pub const TEXTO_2: Color32 = hex(0x9C9CA6);
+pub const TEXTO_OSCURO: Color32 = hex(0x1C1C1E);
+/// Ámbar para lo elegido.
+pub const ACENTO: Color32 = hex(0xF5B83D);
+/// Fondo de la pantallita LCD de arriba.
+pub const LCD: Color32 = hex(0x0E0F11);
+pub const VERDE: Color32 = hex(0x4CD964);
+
+// Nombres de antes, ya con la paleta nueva.
+pub const NARANJA: Color32 = BORDE;
+pub const OLED: Color32 = hex(0x151517);
+pub const OLED_APAGADO: Color32 = hex(0x2C2C31);
+pub const NEON_AMARILLO: Color32 = TEXTO;
+pub const NEON_CIAN: Color32 = TEXTO_2;
+pub const NEON_ROSA: Color32 = hex(0x5AC8FA);
+pub const MARRON: Color32 = TEXTO_2;
 pub const BLANCO: Color32 = Color32::WHITE;
+
+/// Colores de las teclas de menú del mando (gris, amarillo y rojo).
+pub const MENU_GRIS: Color32 = hex(0x8E8A99);
+pub const MENU_AMARILLO: Color32 = hex(0xF2CF2E);
+pub const MENU_ROJO: Color32 = hex(0xE5483D);
 
 /// Un color por tecla de acorde, en arcoíris.
 pub const ACORDES: [Color32; 7] = [
@@ -34,7 +49,7 @@ pub const ACORDES: [Color32; 7] = [
 /// ¿Va mejor texto oscuro encima de este color?
 pub fn texto_sobre(c: Color32) -> Color32 {
     let l = 0.299 * c.r() as f32 + 0.587 * c.g() as f32 + 0.114 * c.b() as f32;
-    if l > 170.0 { MARRON } else { BLANCO }
+    if l > 170.0 { TEXTO_OSCURO } else { BLANCO }
 }
 
 /// Color de cada una de las 12 tonalidades (rueda de color), para no tener que poner nombres.

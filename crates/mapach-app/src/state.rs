@@ -283,6 +283,10 @@ pub struct OpenMenu {
     pub item: usize,
 }
 
+/// Filas del secuenciador: los 7 instrumentos y "Salir".
+pub const SEQ_ROWS: usize = 8;
+pub const SEQ_EXIT: usize = 7;
+
 pub const BPM_MIN: f32 = 40.0;
 pub const BPM_MAX: f32 = 300.0;
 
@@ -876,6 +880,37 @@ impl State {
             .find(|&m| self.menus_held[menu_idx(m)])
     }
 
+    /// ¿Está Play pulsado? (para el dibujo del mando)
+    pub fn play_pressed(&self) -> bool {
+        self.play_held.is_some()
+    }
+
+    /// ¿Está Grabar pulsado?
+    pub fn record_pressed(&self) -> bool {
+        self.record_held.is_some()
+    }
+
+    /// Qué hace ahora la rueda grande (para enseñarlo bajo su dibujo).
+    pub fn cursor_role(&self) -> &'static str {
+        match self.menu_held() {
+            Some(Menu::Tono) => return "tonalidad",
+            Some(Menu::Sonido) => return "sonido",
+            Some(Menu::Modo) => return "modo",
+            None => {}
+        }
+        if self.play_held.is_some() {
+            "pista"
+        } else if self.open_menu.is_some() {
+            if self.menu_edit { "cambiar" } else { "elegir" }
+        } else if self.play_mode == PlayMode::Secuencia {
+            "instrumento"
+        } else if self.current.is_some() {
+            "color"
+        } else {
+            "elegir"
+        }
+    }
+
     pub fn arrow_held(&self, a: Arrow) -> bool {
         self.arrows[arrow_idx(a)]
     }
@@ -1047,10 +1082,16 @@ impl State {
                         Arrow::Down => 1,
                         _ => 0,
                     };
-                    self.seq_row = wrap(self.seq_row, d, 7);
+                    self.seq_row = wrap(self.seq_row, d, SEQ_ROWS);
                 } else {
                     self.revoice(out);
                 }
+            }
+            // En la fila "Salir", cualquier tecla sale del secuenciador.
+            Control::Step(_) if self.seq_row == SEQ_EXIT => {
+                self.seq_row = 0;
+                self.drum_style = STYLES.len();
+                self.set_play_mode(PlayMode::Ritmos, out);
             }
             Control::Step(n) if (n as usize) < STEPS => {
                 let bit = 1u8 << self.seq_row;
@@ -1286,7 +1327,7 @@ impl State {
                     self.track = wrap(self.track, d, TRACKS);
                     self.looper_shown_until = self.now + 2.0;
                 } else if self.play_mode == PlayMode::Secuencia {
-                    self.seq_row = wrap(self.seq_row, d, 7);
+                    self.seq_row = wrap(self.seq_row, d, SEQ_ROWS);
                 } else if self.current.is_some() {
                     self.knob_color = wrap(self.knob_color, d, Direction::KNOB_CYCLE.len());
                     self.revoice(out);
@@ -2008,6 +2049,17 @@ mod tests {
         assert_eq!(s.play_mode, PlayMode::Ritmos);
         assert_eq!(s.drum_pattern(), s.seq_pattern);
         assert!(s.drums_playing);
+    }
+
+    #[test]
+    fn salir_del_secuenciador_con_la_rueda() {
+        let mut s = State::default();
+        set_mode(&mut s, PlayMode::Secuencia);
+        s.handle(Event::Turn(Knob::Cursor, -1), 0.0);
+        assert_eq!(s.seq_row, SEQ_EXIT);
+        press(&mut s, Control::Pad(5));
+        assert_eq!(s.play_mode, PlayMode::Ritmos);
+        assert_eq!(s.seq_pattern, drums::EMPTY, "salir no enciende pasos");
     }
 
     #[test]
