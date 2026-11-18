@@ -1908,37 +1908,70 @@ pub fn draw_learn(c: &Canvas, step: usize, total: usize, prompt: &str, msg: Opti
     );
 }
 
-/// Pantalla del modo papá.
-pub fn draw_papa(c: &Canvas, lines: &[String]) {
+/// Menú F1: información y opciones con F2–F10.
+pub fn draw_menu(c: &Canvas, info: &[String], opts: &[(&str, String)]) {
     c.painter
         .rect_filled(c.painter.clip_rect(), 0.0, Color32::from_black_alpha(200));
-    c.rect(180.0, 60.0, 600.0, 430.0, 28.0, OLED);
-    c.rect_stroke(180.0, 60.0, 600.0, 430.0, 28.0, 4.0, NARANJA);
+    c.rect(170.0, 50.0, 620.0, 440.0, 12.0, PANEL);
+    c.rect_stroke(170.0, 50.0, 620.0, 440.0, 12.0, 1.0, BORDE);
+    c.text(196.0, 82.0, Align2::LEFT_CENTER, "Menú", 24.0, TEXTO);
     c.text(
-        480.0,
-        100.0,
-        Align2::CENTER_CENTER,
-        "🔧 Modo papá",
-        32.0,
-        NEON_AMARILLO,
+        764.0,
+        82.0,
+        Align2::RIGHT_CENTER,
+        "Esc cerrar",
+        13.0,
+        TEXTO_2,
     );
-    for (i, l) in lines.iter().enumerate() {
+    for (i, l) in info.iter().enumerate() {
         c.text(
-            220.0,
-            148.0 + i as f32 * 26.0,
+            196.0,
+            116.0 + i as f32 * 20.0,
             Align2::LEFT_CENTER,
             l,
-            18.0,
-            NEON_CIAN,
+            13.0,
+            TEXTO_2,
         );
     }
+    c.line(&[(196.0, 182.0), (764.0, 182.0)], 1.0, BORDE);
+    for (i, (k, label)) in opts.iter().enumerate() {
+        let y = 206.0 + i as f32 * 33.0;
+        c.rect(196.0, y - 12.0, 58.0, 24.0, 6.0, PANEL_2);
+        c.rect_stroke(196.0, y - 12.0, 58.0, 24.0, 6.0, 1.0, BORDE);
+        c.text(225.0, y, Align2::CENTER_CENTER, *k, 13.0, ACENTO);
+        c.text(270.0, y, Align2::LEFT_CENTER, label, 16.0, TEXTO);
+    }
+}
+
+/// Escribir un nombre (con el teclado del ordenador).
+pub fn draw_naming(c: &Canvas, title: &str, text: &str, time: f64) {
+    c.painter
+        .rect_filled(c.painter.clip_rect(), 0.0, Color32::from_black_alpha(210));
+    c.rect(200.0, 170.0, 560.0, 190.0, 12.0, PANEL);
+    c.rect_stroke(200.0, 170.0, 560.0, 190.0, 12.0, 1.5, ACENTO);
+    c.text(226.0, 202.0, Align2::LEFT_CENTER, title, 20.0, TEXTO);
+    c.rect(226.0, 230.0, 508.0, 44.0, 8.0, LCD);
+    c.rect_stroke(226.0, 230.0, 508.0, 44.0, 8.0, 1.0, BORDE);
+    let cursor = if (time * 2.0).fract() < 0.5 {
+        "▏"
+    } else {
+        " "
+    };
     c.text(
-        480.0,
-        468.0,
-        Align2::CENTER_CENTER,
-        "Esc salir del programa · Ctrl+Alt+P volver",
+        240.0,
+        252.0,
+        Align2::LEFT_CENTER,
+        format!("{text}{cursor}"),
         20.0,
-        NEON_AMARILLO,
+        TEXTO,
+    );
+    c.text(
+        226.0,
+        320.0,
+        Align2::LEFT_CENTER,
+        "Escribe con el teclado · Intro aceptar · Esc cancelar",
+        13.0,
+        TEXTO_2,
     );
 }
 

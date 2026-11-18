@@ -338,6 +338,47 @@ impl Songs {
         self.dirty_since = None;
     }
 
+    /// ¿La canción actual está guardada (tiene nombre y carpeta)?
+    pub fn is_saved(&self) -> bool {
+        self.current.carpeta.is_some()
+    }
+
+    /// Cambia el nombre de la canción. Si ya estaba guardada, también su carpeta.
+    pub fn rename(&mut self, name: &str) -> Result<(), String> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err("El nombre no puede estar vacío".into());
+        }
+        if let Some(old) = self.current.carpeta.clone() {
+            let new_dir = self
+                .songs_dir
+                .join(mapach_project::paths::safe_file_name(name));
+            if new_dir != old {
+                if new_dir.exists() {
+                    return Err("Ya hay una canción con ese nombre".into());
+                }
+                std::fs::rename(&old, &new_dir).map_err(|e| e.to_string())?;
+            }
+            self.current.carpeta = Some(new_dir);
+            // Que el cancion.ron lleve el nombre nuevo en el próximo guardado.
+            self.dirty_since = Some(f64::MIN);
+        }
+        self.current.nombre = name.to_string();
+        Ok(())
+    }
+
+    /// Prepara una copia: la canción pasa a llamarse `name` y se guardará en una carpeta nueva
+    /// (la original se queda como estaba en disco).
+    pub fn start_copy(&mut self, name: &str) -> Result<(), String> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err("El nombre no puede estar vacío".into());
+        }
+        self.current.nombre = name.to_string();
+        self.current.carpeta = None;
+        Ok(())
+    }
+
     /// Mira si el looper ha cambiado y, un par de segundos después, guarda solo.
     pub fn autosave(&mut self, now: f64, looper: LooperStatus, st: &State, audio: &mut impl Link) {
         if looper.used != self.last_used {
@@ -348,7 +389,8 @@ impl Songs {
             && looper.recording.is_none()
             && self.collect.is_none()
             && now - since > 2.0
-            && (!looper.is_empty() || self.current.carpeta.is_some())
+            // Solo las canciones ya guardadas (con nombre) se guardan solas.
+            && self.current.carpeta.is_some()
         {
             self.begin_save(st, audio, None);
         }
@@ -498,6 +540,41 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(base);
         let _ = std::fs::remove_dir_all(exports);
+    }
+
+    #[test]
+    fn renombrar_y_copiar() {
+        let base = tmp("rename");
+        let mut link = Fake::new();
+        let st = State::default();
+        let mut songs = Songs::new(
+            Current {
+                nombre: "Rana Veloz".into(),
+                color: [0; 3],
+                carpeta: None,
+            },
+            48_000,
+        )
+        .with_dirs(base.clone(), tmp("rename-exp"));
+        // Sin guardar, renombrar solo cambia el nombre y no se guarda sola.
+        songs.rename("Mi canción").unwrap();
+        assert!(!songs.is_saved());
+        songs.begin_save(&st, &mut link, None);
+        assert!(matches!(wait(&mut songs, &mut link), Done::Saved(_)));
+        assert!(base.join("Mi canción").exists());
+        // Guardada: renombrar mueve la carpeta.
+        songs.rename("Otra").unwrap();
+        assert!(base.join("Otra").exists());
+        assert!(!base.join("Mi canción").exists());
+        // Copiar: se guarda aparte y la original sigue.
+        songs.start_copy("Otra copia").unwrap();
+        songs.begin_save(&st, &mut link, None);
+        assert!(matches!(wait(&mut songs, &mut link), Done::Saved(_)));
+        assert!(base.join("Otra").exists() && base.join("Otra copia").exists());
+        // No se puede pisar otra canción al renombrar.
+        assert!(songs.rename("Otra").is_err());
+        assert!(songs.rename("   ").is_err());
+        let _ = std::fs::remove_dir_all(base);
     }
 
     #[test]

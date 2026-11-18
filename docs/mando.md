@@ -166,7 +166,7 @@ Sin modificadores, y las 3 capas iguales:
    cambian el volumen del sistema.
 2. **Se identifica por dispositivo**, así que no importa si sus códigos coinciden con teclas del
    teclado normal: los dos funcionan a la vez sin pisarse.
-3. **Asistente "Aprender mando"** (la primera vez o desde el modo papá). La pantalla pide
+3. **Asistente "Aprender mando"** (menú `F1` › `F10`). La pantalla pide
    *"pulsa la tecla roja"*, *"gira la perilla 1 a la derecha"*… y guarda el resultado en
    `mando.ron`. Si un código se repite, avisa.
 4. **Permisos:** la regla [`config/70-mapachsynthesizer-mando.rules`](../config/70-mapachsynthesizer-mando.rules) da acceso

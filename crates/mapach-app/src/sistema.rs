@@ -1,45 +1,6 @@
-//! Modo papá: ajustes avanzados protegidos con Ctrl+Alt+P.
+//! Ajustes del sistema del menú F1: volumen máximo y arranque al encender.
 
 use std::path::PathBuf;
-
-/// Opciones que se pueden cambiar.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PapaItem {
-    /// Volumen máximo (techo del limitador).
-    VolumenMaximo,
-    /// Enseñar nombres de acordes y notas.
-    Nombres,
-    /// Colores por nota en vez de por tecla.
-    ColoresNota,
-    /// Arrancar al encender el ordenador.
-    Arranque,
-    /// Asistente "Aprender mando".
-    Aprender,
-    /// Volver a la tabla de serie del mando.
-    MandoDeSerie,
-}
-
-impl PapaItem {
-    pub const ALL: [PapaItem; 6] = [
-        PapaItem::VolumenMaximo,
-        PapaItem::Nombres,
-        PapaItem::ColoresNota,
-        PapaItem::Arranque,
-        PapaItem::Aprender,
-        PapaItem::MandoDeSerie,
-    ];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            PapaItem::VolumenMaximo => "Volumen máximo",
-            PapaItem::Nombres => "Nombres de acordes",
-            PapaItem::ColoresNota => "Colores por nota",
-            PapaItem::Arranque => "Arrancar al encender",
-            PapaItem::Aprender => "Aprender mando",
-            PapaItem::MandoDeSerie => "Mando de serie",
-        }
-    }
-}
 
 pub const MAX_DB_RANGE: (f32, f32) = (-24.0, -3.0);
 

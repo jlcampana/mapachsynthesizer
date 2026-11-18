@@ -373,7 +373,7 @@ pub struct State {
     pub follow: Option<Follow>,
     /// Estrellas ganadas en los juegos.
     pub stars: u32,
-    /// Volumen máximo en dBFS (techo del limitador; se cambia en el modo papá).
+    /// Volumen máximo en dBFS (techo del limitador; se cambia en el menú F1).
     pub max_db: f32,
     /// Presets rápidos F1–F4 (como P1–P4 del HiChord).
     pub presets: [Option<Box<crate::ajustes::Ajustes>>; 4],
@@ -810,7 +810,7 @@ impl State {
         }
         out.push(Command::StopChord);
         let was_drums = self.drums_playing;
-        // El volumen máximo lo decide el modo papá, no los presets.
+        // El volumen máximo lo decide el menú F1, no los presets.
         let max_db = self.max_db;
         a.apply(self);
         self.max_db = max_db;
@@ -913,7 +913,7 @@ impl State {
         if self.muted { 0.0 } else { self.volume }
     }
 
-    /// Suelta todo lo pulsado (al perder el foco o abrir el modo papá).
+    /// Suelta todo lo pulsado (al perder el foco o abrir el menú F1).
     pub fn release_all(&mut self) {
         self.picker = None;
         self.shortcut_held = [false; mapach_engine::SHORTCUTS];

@@ -69,8 +69,11 @@ canciones › Nueva.
 
 ## Canciones (`F5`)
 
-Las canciones se guardan solas y la app abre la última al arrancar. En la pantalla: ←→ eligen,
-`Espacio` abre (o crea una "Nueva"), ↓ baja a exportar MP3, OGG o WAV. Lo exportado va a
+Una canción nueva no se guarda hasta que se le da a **Guardar** en el menú `F1` (pide el nombre).
+Desde entonces se guarda sola cada vez que cambia el looper, y la app la abre al arrancar.
+
+En la pantalla Mis canciones: la rueda elige, OK (o `Espacio`) abre una canción o crea una
+"Nueva", y abajo se exporta a MP3, OGG o WAV. Lo exportado va a
 `Música/Mapachsynthesizer/Exportadas`.
 
 ## Taller de samples (`Tab`)
@@ -109,20 +112,26 @@ internet: la app los lee tal cual.
 
 ## Presets
 
-`F1`–`F4`: pulsar carga y mantener 1,5 s guarda sonido, efectos, tonalidad, modo y ritmo.
+`F9`–`F12`: pulsar carga y mantener 1,5 s guarda sonido, efectos, tonalidad, modo y ritmo.
 
-## Modo papá (`Ctrl+Alt+P`)
+## Menú (`F1`)
 
-Información del audio y del mando, y:
+`F1` abre el menú; dentro, cada opción va con una tecla y `Esc` lo cierra. Arriba se ve el audio, el
+mando y si la canción está guardada.
 
-- **Volumen máximo** (−24 a −3 dBFS, −12 por defecto): el techo que nada puede pasar.
-- **Nombres de acordes**: enseñar "Do", "Lam7"… en vez de números.
-- **Colores por nota**: Do rojo, Re naranja, Mi amarillo, Fa verde, Sol turquesa, La morado, Si rosa
-  (los colores de los tubos y campanas de clase). Viene activado; si se quita, cada tecla lleva su
-  color del arcoíris aunque cambie la tonalidad.
-- **Arrancar al encender**: abre Mapachsynthesizer al iniciar sesión.
-- **Aprender mando** y **Mando de serie**.
-- `Ctrl+Alt+P` vuelve a tocar. `Esc` (en cualquier momento) cierra el programa.
+| Tecla | Qué hace |
+|---|---|
+| `F2` | Canción nueva (se pierde lo que no esté guardado) |
+| `F3` | Poner nombre o renombrar la canción (si ya está guardada, también su carpeta) |
+| `F4` | Copiar la canción: la guarda con otro nombre y sigues trabajando en la copia |
+| `F5` | Guardar (si aún no tiene nombre, lo pide) |
+| `F6` / `F7` | Volumen máximo − / + (de −24 a −3 dBFS; −12 por defecto): el techo que nada puede pasar |
+| `F8` | Colores por nota sí o no |
+| `F9` | Arrancar al encender sí o no |
+| `F10` | Aprender mando |
+
+Los nombres se escriben con el teclado: `Intro` acepta, `Esc` cancela. Fuera del menú, `Esc`
+cierra el programa. (Los nombres de acordes se activan en el menú gris, Tono › Nombres.)
 
 ## Ficheros
 

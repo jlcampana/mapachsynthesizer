@@ -6,15 +6,10 @@ use mapach_input::{Arrow, Control, Event, Knob, Menu};
 /// Lo que hace una tecla.
 pub enum KeyAction {
     Event(Event),
-    /// Abrir o cerrar el modo papá.
-    Papa,
 }
 
 /// Traduce una tecla de `egui`. `pressed` = pulsada (sin repeticiones).
-pub fn translate(key: Key, mods: Modifiers, pressed: bool) -> Option<KeyAction> {
-    if key == Key::P && mods.ctrl && mods.alt {
-        return pressed.then_some(KeyAction::Papa);
-    }
+pub fn translate(key: Key, _mods: Modifiers, pressed: bool) -> Option<KeyAction> {
     let ev = |c: Control| {
         Some(KeyAction::Event(if pressed {
             Event::Press(c)
@@ -58,10 +53,11 @@ pub fn translate(key: Key, mods: Modifiers, pressed: bool) -> Option<KeyAction> 
         K::Num7 => ev(Control::Track(6)),
         K::Num8 => ev(Control::Track(7)),
         K::I => ev(Control::ChordHigh(7)),
-        K::F1 => ev(Control::Preset(0)),
-        K::F2 => ev(Control::Preset(1)),
-        K::F3 => ev(Control::Preset(2)),
-        K::F4 => ev(Control::Preset(3)),
+        // F1 abre el menú (lo atiende la app). Los presets, en F9–F12.
+        K::F9 => ev(Control::Preset(0)),
+        K::F10 => ev(Control::Preset(1)),
+        K::F11 => ev(Control::Preset(2)),
+        K::F12 => ev(Control::Preset(3)),
         K::F5 => ev(Control::Canciones),
         K::Tab => ev(Control::Taller),
         K::B => ev(Control::Tap),

@@ -28,16 +28,15 @@ Con él se puede:
 - **Batería** sintetizada (4 kits), **56 ritmos** y **secuenciador de 16 pasos**.
 - **Looper de 6 pistas**: `Espacio` graba, `1`–`6` eligen pista, mantener una pista 1,5 s la
   borra y `Retroceso` deshace.
-- **Mis canciones** (`F5`): se guardan solas, con nombres divertidos, y se exportan a **MP3, OGG o
+- **Mis canciones** (`F5`): se guardan con su nombre (y luego solas) y se exportan a **MP3, OGG o
   WAV** en `Música/Mapachsynthesizer/Exportadas`.
 - El mando de 16 teclas y 3 perillas, leído por `evdev` en exclusiva.
 - Limitador a −12 dBFS al final de todo y ajustes que se guardan solos.
-- `Esc` cierra el programa. Modo papá (`Ctrl+Alt+P`) para los ajustes.
+- `Esc` cierra el programa. Menú `F1`: canción nueva, renombrar, copiar, guardar y ajustes.
 
 - **Taller de samples** (`Tab`): grabar con el micro, importar de `Música/Mapachsynthesizer/Importar`,
   10 botones de destrozar con deshacer, y usar el sonido en los acordes ("Mi sample").
-- Presets `F1`–`F4` (pulsar carga, mantener guarda).
-- Modo papá con volumen máximo y arranque al encender.
+- Presets `F9`–`F12` (pulsar carga, mantener guarda).
 
 - Juego de oído (menú rojo), colores fijados en las teclas 🔒 y asistente "Aprender mando".
 
@@ -72,7 +71,7 @@ sudo apt install libasound2-dev          # Ubuntu / Debian
 | `V N M ,` | Atajos a samples (fila 3 del mando) |
 | `F5` | Mis canciones |
 | `Esc` | Cerrar el programa |
-| `Ctrl+Alt+P` | Modo papá (ajustes) |
+| `F1` | Menú: nueva, renombrar, copiar, guardar, ajustes (`Esc` lo cierra) |
 
 ### Instalar en el ordenador del niño
 
@@ -92,7 +91,7 @@ de la pantalla (escenas 0–12).
 
 ### Documentos
 
-- [Cómo se usa](docs/uso.md): teclas, menús, modos, looper, canciones, taller y modo papá.
+- [Cómo se usa](docs/uso.md): teclas, menús, modos, looper, canciones, taller y menú `F1`.
 - [Investigación](docs/investigacion.md): qué hacen el HiChord y el FM-1, la perilla de AliExpress y las crates de Rust, y los firmwares de la comunidad del FM-1 (fm1-chord, Rainbow mode).
 - [Plan](docs/plan.md): principios, mapa de teclas, funciones, arquitectura, fases y preguntas abiertas.
 - [Mando](docs/mando.md): mapeo del macropad de 16 teclas y 3 perillas. Ya está programado con [`herramientas/mando.py`](herramientas/mando.py).

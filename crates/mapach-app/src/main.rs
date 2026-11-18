@@ -5,7 +5,7 @@ mod aprender;
 mod canciones;
 mod captura;
 mod keyboard;
-mod papa;
+mod sistema;
 mod state;
 mod taller;
 mod theme;
@@ -78,8 +78,10 @@ struct App {
     mando_raw: Receiver<u16>,
     /// Asistente "Aprender mando" en marcha.
     learn: Option<aprender::Learn>,
-    papa: bool,
-    papa_sel: usize,
+    /// Menú F1 abierto.
+    menu: bool,
+    /// Escribiendo un nombre de canción.
+    naming: Option<Naming>,
     /// Tecla de acorde pulsada con el ratón o el dedo.
     pointer_chord: Option<u8>,
     focused: bool,
@@ -92,6 +94,23 @@ struct App {
     /// Canciones (solo si hay audio: sin motor no hay pistas que guardar).
     songs: Option<canciones::Songs>,
     taller: taller::Taller,
+}
+
+/// Para qué se pide un nombre.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NamePurpose {
+    /// Poner nombre o renombrar.
+    Renombrar,
+    /// Guardar una copia con otro nombre.
+    Copiar,
+    /// Guardar por primera vez.
+    Guardar,
+}
+
+/// Nombre que se está escribiendo.
+struct Naming {
+    purpose: NamePurpose,
+    text: String,
 }
 
 /// Para el taller sin tarjeta de sonido: las órdenes se pierden.
@@ -162,8 +181,8 @@ impl App {
             mando_shared,
             mando_raw,
             learn: None,
-            papa: false,
-            papa_sel: 0,
+            menu: false,
+            naming: None,
             pointer_chord: None,
             focused: true,
             wheel: 0.0,
@@ -175,7 +194,13 @@ impl App {
         };
         if let Some(cap) = &app.captura {
             cap.fake_taller(&mut app.taller);
-            app.papa = cap.demo == 14;
+            app.menu = cap.demo == 14;
+            if cap.demo == 20 {
+                app.naming = Some(Naming {
+                    purpose: NamePurpose::Guardar,
+                    text: "Dragón Naranja".into(),
+                });
+            }
         }
         // Los samples de los atajos.
         let atajos = app.state.shortcuts.clone();
@@ -556,92 +581,167 @@ impl App {
         }
         self.learn = on.then(aprender::Learn::new);
         if on {
-            self.papa = false;
+            self.menu = false;
         }
     }
 
-    /// Teclas en el modo papá: ↑↓ eligen, ←→ cambian.
-    fn papa_key(&mut self, key: egui::Key) {
-        let n = papa::PapaItem::ALL.len();
-        let d = match key {
-            egui::Key::ArrowUp => {
-                self.papa_sel = (self.papa_sel + n - 1) % n;
-                return;
+    /// Teclas F2–F10 con el menú F1 abierto.
+    fn menu_key(&mut self, key: egui::Key) {
+        use egui::Key as K;
+        let name = self
+            .songs
+            .as_ref()
+            .map(|s| s.current.nombre.clone())
+            .unwrap_or_default();
+        match key {
+            K::F2 => {
+                // Canción nueva: se pierde lo que no esté guardado.
+                if let (Some(songs), Some(audio)) = (&mut self.songs, &mut self.audio) {
+                    songs.new_song(&mut self.state, audio);
+                    self.state.show_toast("✨ Canción nueva");
+                }
+                self.menu = false;
             }
-            egui::Key::ArrowDown => {
-                self.papa_sel = (self.papa_sel + 1) % n;
-                return;
+            K::F3 => {
+                self.naming = Some(Naming {
+                    purpose: NamePurpose::Renombrar,
+                    text: name,
+                })
             }
-            egui::Key::ArrowLeft => -1.0,
-            egui::Key::ArrowRight | egui::Key::Enter => 1.0,
-            _ => return,
-        };
-        match papa::PapaItem::ALL[self.papa_sel] {
-            papa::PapaItem::VolumenMaximo => {
-                let (lo, hi) = papa::MAX_DB_RANGE;
+            K::F4 => {
+                self.naming = Some(Naming {
+                    purpose: NamePurpose::Copiar,
+                    text: format!("{name} copia"),
+                })
+            }
+            K::F5 => {
+                if self.songs.as_ref().is_some_and(|s| s.is_saved()) {
+                    self.save_song();
+                    self.menu = false;
+                } else {
+                    // Aún no tiene nombre: se pide.
+                    self.naming = Some(Naming {
+                        purpose: NamePurpose::Guardar,
+                        text: name,
+                    });
+                }
+            }
+            K::F6 | K::F7 => {
+                let d = if key == K::F6 { -1.0 } else { 1.0 };
+                let (lo, hi) = sistema::MAX_DB_RANGE;
                 self.state.max_db = (self.state.max_db + d).clamp(lo, hi);
                 let c = Command::SetParam(mapach_engine::Param::MaxLevelDb(self.state.max_db));
                 self.send_all(vec![c]);
             }
-            papa::PapaItem::Nombres => self.state.show_names = !self.state.show_names,
-            papa::PapaItem::ColoresNota => self.state.note_colors = !self.state.note_colors,
-            papa::PapaItem::Arranque => {
-                let on = !papa::autostart_enabled();
-                if let Err(e) = papa::set_autostart(on) {
+            K::F8 => self.state.note_colors = !self.state.note_colors,
+            K::F9 => {
+                let on = !sistema::autostart_enabled();
+                if let Err(e) = sistema::set_autostart(on) {
                     eprintln!("Arranque automático: {e}");
                 }
             }
-            papa::PapaItem::Aprender => {
+            K::F10 => {
                 if self.mando_status == mando::Status::Conectado {
                     self.set_learning(true, None);
                 } else {
                     self.state.show_toast("Conecta el mando primero");
                 }
             }
-            papa::PapaItem::MandoDeSerie => {
-                let _ = aprender::path().map(std::fs::remove_file);
-                self.set_learning(false, Some(mando::Mapping::default()));
-                self.state
-                    .show_toast("🎮 Mando como de fábrica de Mapachsynthesizer");
+            _ => {}
+        }
+    }
+
+    /// Guarda la canción ya (en segundo plano).
+    fn save_song(&mut self) {
+        if let (Some(songs), Some(audio)) = (&mut self.songs, &mut self.audio) {
+            songs.begin_save(&self.state, audio, None);
+            self.state
+                .show_toast(format!("💾 Guardando «{}»", songs.current.nombre));
+        } else {
+            self.state
+                .show_toast("Sin audio no se pueden guardar canciones");
+        }
+    }
+
+    /// Se ha escrito un nombre y se ha pulsado Intro.
+    fn naming_done(&mut self, n: Naming) {
+        let Some(songs) = &mut self.songs else { return };
+        let res = match n.purpose {
+            NamePurpose::Renombrar => songs.rename(&n.text),
+            NamePurpose::Copiar => songs.start_copy(&n.text),
+            NamePurpose::Guardar => songs.rename(&n.text),
+        };
+        match res {
+            Ok(()) => {
+                if n.purpose != NamePurpose::Renombrar || songs.is_saved() {
+                    self.save_song();
+                } else {
+                    self.state
+                        .show_toast(format!("✏ Se llama «{}»", n.text.trim()));
+                }
+                self.menu = false;
+            }
+            Err(e) => {
+                self.state.show_toast(e);
+                // Se puede volver a intentar.
+                self.naming = Some(n);
             }
         }
     }
 
-    fn papa_lines(&self) -> Vec<String> {
-        let mut v = Vec::new();
+    fn menu_lines(&self) -> (Vec<String>, Vec<(&'static str, String)>) {
+        let mut info = Vec::new();
         match &self.audio {
-            Some(a) => {
-                v.push(format!("Audio: {}", a.device_name));
-                v.push(format!(
-                    "{} Hz · bloque {} · latencia {:.1} ms",
-                    a.sample_rate,
-                    a.block_frames(),
-                    a.latency_ms()
-                ));
-                v.push(format!("Voces sonando: {}", a.voices()));
-            }
-            None => v.push("Sin audio".into()),
+            Some(a) => info.push(format!(
+                "Audio: {} · {} Hz · latencia {:.1} ms",
+                a.device_name,
+                a.sample_rate,
+                a.latency_ms()
+            )),
+            None => info.push("Sin audio".into()),
         }
-        v.push(format!("Mando: {}", status_text(self.mando_status)));
-        v.push(format!(
-            "Versión {} · ⭐ {} estrellas",
+        info.push(format!(
+            "Mando: {} · versión {} · ⭐ {}",
+            status_text(self.mando_status),
             env!("CARGO_PKG_VERSION"),
             self.state.stars
         ));
-        v.push(String::new());
+        let song = self
+            .songs
+            .as_ref()
+            .map(|s| {
+                if s.is_saved() {
+                    format!("«{}» (guardada)", s.current.nombre)
+                } else {
+                    "sin guardar".to_string()
+                }
+            })
+            .unwrap_or_default();
+        info.push(format!("Canción: {song}"));
         let si_no = |b: bool| if b { "sí" } else { "no" };
-        for (i, item) in papa::PapaItem::ALL.iter().enumerate() {
-            let value = match item {
-                papa::PapaItem::VolumenMaximo => format!("{:.0} dBFS", self.state.max_db),
-                papa::PapaItem::Nombres => si_no(self.state.show_names).into(),
-                papa::PapaItem::ColoresNota => si_no(self.state.note_colors).into(),
-                papa::PapaItem::Arranque => si_no(papa::autostart_enabled()).into(),
-                papa::PapaItem::Aprender | papa::PapaItem::MandoDeSerie => "Intro".into(),
-            };
-            let mark = if i == self.papa_sel { "▶" } else { "  " };
-            v.push(format!("{mark} {}: ◀ {value} ▶", item.label()));
-        }
-        v
+        let opts = vec![
+            ("F2", "Canción nueva (se pierde lo no guardado)".to_string()),
+            ("F3", "Poner nombre o renombrar".to_string()),
+            ("F4", "Copiar la canción".to_string()),
+            ("F5", "Guardar".to_string()),
+            (
+                "F6/F7",
+                format!("Volumen máximo: {:.0} dBFS", self.state.max_db),
+            ),
+            (
+                "F8",
+                format!("Colores por nota: {}", si_no(self.state.note_colors)),
+            ),
+            (
+                "F9",
+                format!(
+                    "Arrancar al encender: {}",
+                    si_no(sistema::autostart_enabled())
+                ),
+            ),
+            ("F10", "Aprender mando".to_string()),
+        ];
+        (info, opts)
     }
 }
 
@@ -692,7 +792,7 @@ impl eframe::App for App {
             self.mando_status = s;
         }
         while let Ok(ev) = self.mando_rx.try_recv() {
-            if !self.papa {
+            if !self.menu && self.naming.is_none() {
                 self.event(ev, now);
             }
         }
@@ -715,6 +815,14 @@ impl eframe::App for App {
         let events = ctx.input(|i| i.events.clone());
         let mut scroll = 0.0;
         for ev in events {
+            if let (egui::Event::Text(t), Some(n)) = (&ev, &mut self.naming) {
+                for ch in t.chars().filter(|c| !c.is_control()) {
+                    if n.text.chars().count() < 40 {
+                        n.text.push(ch);
+                    }
+                }
+                continue;
+            }
             if let egui::Event::MouseWheel { unit, delta, .. } = ev {
                 scroll += match unit {
                     egui::MouseWheelUnit::Point => delta.y / 40.0,
@@ -736,31 +844,48 @@ impl eframe::App for App {
                     }
                     continue;
                 }
-                // Esc cierra el programa (guardando antes).
-                if pressed && key == egui::Key::Escape {
-                    self.release_all();
-                    self.autosave(now, true);
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                // Escribiendo un nombre: Intro acepta, Esc cancela, Retroceso borra.
+                if let Some(n) = &mut self.naming {
+                    if pressed {
+                        match key {
+                            egui::Key::Enter => {
+                                if let Some(n) = self.naming.take() {
+                                    self.naming_done(n);
+                                }
+                            }
+                            egui::Key::Escape => self.naming = None,
+                            egui::Key::Backspace => {
+                                n.text.pop();
+                            }
+                            _ => {}
+                        }
+                    }
                     continue;
                 }
-                if self.papa {
-                    if pressed && key == egui::Key::Q {
+                if pressed && key == egui::Key::Escape {
+                    if self.menu {
+                        // Esc cierra el menú.
+                        self.menu = false;
+                    } else {
+                        // Esc cierra el programa (guardando antes los ajustes).
+                        self.release_all();
                         self.autosave(now, true);
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
-                    if pressed && key == egui::Key::P && modifiers.ctrl && modifiers.alt {
-                        self.papa = false;
-                    }
+                    continue;
+                }
+                if pressed && key == egui::Key::F1 {
+                    self.release_all();
+                    self.menu = !self.menu;
+                    continue;
+                }
+                if self.menu {
                     if pressed {
-                        self.papa_key(key);
+                        self.menu_key(key);
                     }
                     continue;
                 }
                 match keyboard::translate(key, modifiers, pressed) {
-                    Some(KeyAction::Papa) => {
-                        self.release_all();
-                        self.papa = true;
-                    }
                     Some(KeyAction::Event(e)) => self.event(e, now),
                     None => {}
                 }
@@ -772,7 +897,7 @@ impl eframe::App for App {
         while self.wheel.abs() >= 1.0 {
             let d = self.wheel.signum();
             self.wheel -= d;
-            if !self.papa {
+            if !self.menu && self.naming.is_none() {
                 self.event(Event::Turn(Knob::Cursor, d as i32), now);
             }
         }
@@ -783,7 +908,7 @@ impl eframe::App for App {
 
         // Ratón o dedo sobre las teclas de acorde.
         let (down, pos) = ctx.input(|i| (i.pointer.primary_down(), i.pointer.interact_pos()));
-        let target = if down && !self.papa {
+        let target = if down && !self.menu && self.naming.is_none() {
             pos.and_then(|p| ui::chord_at(canvas.to_canvas(p)))
         } else {
             None
@@ -841,8 +966,17 @@ impl eframe::App for App {
                 taller: taller_view,
             },
         );
-        if self.papa {
-            ui::draw_papa(&canvas, &self.papa_lines());
+        if self.menu {
+            let (info, opts) = self.menu_lines();
+            ui::draw_menu(&canvas, &info, &opts);
+        }
+        if let Some(n) = &self.naming {
+            let title = match n.purpose {
+                NamePurpose::Renombrar => "Nombre de la canción",
+                NamePurpose::Copiar => "Nombre de la copia",
+                NamePurpose::Guardar => "Guardar como…",
+            };
+            ui::draw_naming(&canvas, title, &n.text, now);
         }
         if let Some(l) = &self.learn {
             ui::draw_learn(

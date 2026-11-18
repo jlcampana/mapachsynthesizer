@@ -17,7 +17,7 @@ y los bocetos en [bocetos/](bocetos/README.md).
 3. **Colores vivos y grandes.** Carcasa amarilla y naranja, pantalla central oscura tipo OLED
    con texto neón, y un color fijo para cada acorde (arcoíris). Letra redondeada y muy grande.
 4. **Pocas teclas, mucho juego.** Mismo esquema de 3 menús (gris, amarillo, rojo) que el HiChord.
-   Las cosas avanzadas quedan en un "modo papá" protegido.
+   Las cosas avanzadas quedan en el menú `F1` (con el teclado del ordenador).
 5. **Oídos a salvo.** Limitador final obligatorio y volumen máximo configurable
    (por defecto −12 dBFS). Sin picos aunque se sumen 6 pistas con distorsión.
 6. **Sin conexión.** No usa internet, no tiene anuncios ni cuentas.
@@ -48,12 +48,12 @@ El teclado imita los controles del HiChord. Ver el boceto
 | `1`–`6` | Pistas del looper | Seleccionar pista (mantener = borrarla) |
 | `Intro` | Transporte | Play / pausa de todo |
 | `Tab` | — | Abrir el **Taller de samples** |
-| `F1`–`F4` | P1–P4 | Cargar preset (mantener = guardar) |
+| `F1` | — | Menú: nueva canción, renombrar, copiar, guardar y ajustes |
+| `F9`–`F12` | P1–P4 | Cargar preset (mantener = guardar) |
 | `F5` | — | Pantalla de **Canciones** (guardar y exportar) |
 | `B` | Tap tempo | Pulsar 3 o más veces para marcar el tempo |
 | `Retroceso` | — | Deshacer |
 | `Esc` | — | Cerrar el programa |
-| `Ctrl+Alt+P` | — | Modo papá (ajustes avanzados) |
 
 ### La perilla
 
@@ -93,7 +93,7 @@ Hay 5 motores de sonido:
 - **Wavetable sencillo**: órgano, "robot", coro.
 - **Ruido**: viento, olas, nave espacial.
 
-Cada sonido es un fichero `.ron` (preset). En el modo papá se pueden crear más.
+Cada sonido es un preset del motor.
 
 ### 3.3 Efectos
 Reverb (3 salas), Delay sincronizado, Chorus, Flanger, Phaser, **Distorsión** (suave, fuzz,
@@ -123,10 +123,10 @@ Hay un **limitador** fijo al final de la cadena.
 ### 3.7 Canciones: guardar y exportar
 - Guardado automático cada 10 s y al cambiar de pantalla.
 - Cada canción recibe un nombre divertido generado solo ("Dragón Naranja", "Pulpo Saltarín") y
-  un color. Se puede renombrar en el modo papá.
+  un color. Se puede renombrar en el menú `F1`.
 - **Exportar** a **OGG**, **MP3** o **WAV** con un solo botón. El resultado va a
   `~/Música/Mapachsynthesizer/Exportadas/`. Se renderiza más rápido que el tiempo real.
-- 4 presets rápidos (F1–F4), como P1–P4 del HiChord.
+- 4 presets rápidos (F9–F12), como P1–P4 del HiChord.
 
 ### 3.8 Extras (si da tiempo)
 - **Aleatorio** (🎲) en cada menú.
@@ -213,8 +213,8 @@ Cada fase termina con algo que el niño ya puede tocar.
 Orden de prioridad si hay que recortar: 0 → 1 → 2 → 4 → 6 → 7 → 9 → 3 → 5 → 8 → 10.
 
 **Estado (18-11-2026):** fases 0 a 9 hechas en una primera versión. De la 10 están el aleatorio, el
-juego de oído, el modo papá con arranque automático y los paquetes `.deb`/`.rpm`. También están los samples
-como golpes de batería. También *Cópiame*, *Sigue la canción* y las estrellas con sonidos secretos (Rainbow mode, punto 6). Faltan el juego de ritmo y las animaciones. El punto 5 de Rainbow mode (efectos de un toque con nombre de niño) se descarta. Los puntos 3 (colores por nota, en el modo papá) y 7 (tarjeta corta al cambiar de modo) están hechos. La
+juego de oído, el menú F1 con arranque automático y los paquetes `.deb`/`.rpm`. También están los samples
+como golpes de batería. También *Cópiame*, *Sigue la canción* y las estrellas con sonidos secretos (Rainbow mode, punto 6). Faltan el juego de ritmo y las animaciones. El punto 5 de Rainbow mode (efectos de un toque con nombre de niño) se descarta. Los puntos 3 (colores por nota, en el menú F1) y 7 (tarjeta corta al cambiar de modo) están hechos. La
 guía de uso está en [uso.md](uso.md).
 
 ### Calidad
