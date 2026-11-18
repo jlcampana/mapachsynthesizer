@@ -67,6 +67,21 @@ impl PlayMode {
         }
     }
 
+    /// Tarjeta corta que explica el modo (para leerla en voz alta).
+    pub fn card(self) -> &'static str {
+        match self {
+            PlayMode::Tocar => "Tocar: cada tecla, un acorde de color",
+            PlayMode::Rasgueo => "Rasgueo: las notas caen una detrás de otra, como una guitarra",
+            PlayMode::Arpegio => "Arpegio: el acorde sube y baja él solo, al tempo",
+            PlayMode::Repetir => "Repetir: el acorde se repite al ritmo mientras lo mantienes",
+            PlayMode::Zumbido => "Zumbido: el acorde sigue sonando al soltar; Intro lo para",
+            PlayMode::Melodia => "Melodía: cada tecla, una nota sola",
+            PlayMode::Bateria => "Batería: cada tecla, un golpe; Intro pone un ritmo",
+            PlayMode::Ritmos => "Ritmos: suena un ritmo y encima tocas acordes",
+            PlayMode::Secuencia => "Secuencia: enciende los 16 pasos y haz tu ritmo",
+        }
+    }
+
     /// Texto e icono para la barra de arriba.
     pub fn badge(self) -> &'static str {
         match self {
@@ -285,6 +300,8 @@ pub struct State {
     pub bass: bool,
     /// Enseñar nombres de acordes y notas (por defecto no: solo colores).
     pub show_names: bool,
+    /// Colores por nota (Do rojo, Re naranja…) en vez de por tecla.
+    pub note_colors: bool,
     pub play_mode: PlayMode,
     pub arp_pattern: usize,
     pub arp_rate: usize,
@@ -380,6 +397,7 @@ impl Default for State {
             bpm: 120.0,
             bass: true,
             show_names: false,
+            note_colors: false,
             play_mode: PlayMode::Tocar,
             arp_pattern: 0,
             arp_rate: 3,
@@ -511,6 +529,11 @@ impl State {
     /// Enseña un mensaje unos segundos.
     pub fn show_toast(&mut self, text: impl Into<String>) {
         self.toast = Some((text.into(), self.now + 3.0));
+    }
+
+    /// Clase de altura (0 = Do) de la raíz de la tecla `b`, para los colores por nota.
+    pub fn button_pc(&self, b: u8) -> i32 {
+        self.key.chord(b as usize % BUTTONS).root.rem_euclid(12)
     }
 
     pub fn toast_text(&self) -> Option<&str> {
@@ -1377,6 +1400,7 @@ impl State {
     fn set_play_mode(&mut self, m: PlayMode, out: &mut Vec<Command>) {
         if m != self.play_mode {
             self.play_mode = m;
+            self.toast = Some((m.card().to_string(), self.now + 5.0));
             self.current = None;
             self.knob_color = 0;
             self.held.clear();
@@ -2081,6 +2105,16 @@ mod tests {
         // Pulsar la perilla sin color la suelta.
         press(&mut s, Control::KnobPress(Knob::Magica));
         assert_eq!(s.locks[0], None);
+    }
+
+    #[test]
+    fn al_cambiar_de_modo_sale_su_tarjeta() {
+        let mut s = State::default();
+        s.change(Item::Modo, 1, &mut Vec::new());
+        assert_eq!(s.toast_text(), Some(PlayMode::Rasgueo.card()));
+        // En Sol mayor, la tecla 1 es Sol.
+        s.key.transpose(7);
+        assert_eq!(s.button_pc(0), 7);
     }
 
     #[test]

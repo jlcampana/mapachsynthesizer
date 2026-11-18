@@ -9,6 +9,8 @@ pub enum PapaItem {
     VolumenMaximo,
     /// Enseñar nombres de acordes y notas.
     Nombres,
+    /// Colores por nota en vez de por tecla.
+    ColoresNota,
     /// Arrancar al encender el ordenador.
     Arranque,
     /// Asistente "Aprender mando".
@@ -18,9 +20,10 @@ pub enum PapaItem {
 }
 
 impl PapaItem {
-    pub const ALL: [PapaItem; 5] = [
+    pub const ALL: [PapaItem; 6] = [
         PapaItem::VolumenMaximo,
         PapaItem::Nombres,
+        PapaItem::ColoresNota,
         PapaItem::Arranque,
         PapaItem::Aprender,
         PapaItem::MandoDeSerie,
@@ -30,6 +33,7 @@ impl PapaItem {
         match self {
             PapaItem::VolumenMaximo => "Volumen máximo",
             PapaItem::Nombres => "Nombres de acordes",
+            PapaItem::ColoresNota => "Colores por nota",
             PapaItem::Arranque => "Arrancar al encender",
             PapaItem::Aprender => "Aprender mando",
             PapaItem::MandoDeSerie => "Mando de serie",

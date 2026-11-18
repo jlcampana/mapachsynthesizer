@@ -278,10 +278,10 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
     if let Some((m, sel)) = menu {
         menu_page(c, st, m, sel);
     } else if let Some(g) = &st.game {
-        game_view(c, g, extra);
+        game_view(c, g, extra, st);
         stars_line(c, st);
     } else if let Some(sm) = &st.simon {
-        simon_view(c, sm);
+        simon_view(c, sm, st);
         stars_line(c, st);
     } else if let Some(f) = &st.follow {
         follow_view(c, f, st);
@@ -299,7 +299,7 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
     } else if st.play_mode == PlayMode::Melodia {
         melody_view(c, st);
     } else if let Some(s) = &st.current {
-        let col = ACORDES[s.button as usize];
+        let col = button_color(st, s.button);
         if st.show_names {
             c.text(
                 430.0,
@@ -539,7 +539,7 @@ fn mini_piano(c: &Canvas, st: &State) {
     let col = st
         .current
         .as_ref()
-        .map(|s| ACORDES[s.button as usize])
+        .map(|s| button_color(st, s.button))
         .unwrap_or(NEON_AMARILLO);
     // 3 octavas desde el Do de la nota más grave que suene (o Do2).
     let lo = notes
@@ -790,7 +790,7 @@ fn joystick(c: &Canvas, st: &State) {
                 x,
                 y,
                 22.0,
-                ACORDES[st.current.as_ref().map_or(0, |s| s.button as usize)],
+                button_color(st, st.current.as_ref().map_or(0, |s| s.button)),
             );
         }
         let label = format!("{}\n{}", d.arrow(), dir_label(st.mod_mode, d));
@@ -829,6 +829,15 @@ fn joystick(c: &Canvas, st: &State) {
 const LETRAS: [&str; 7] = ["A", "S", "D", "F", "G", "H", "J"];
 const ROMANOS: [&str; 7] = ["I", "ii", "iii", "IV", "V", "vi", "vii"];
 
+/// Color de una tecla de acorde: arcoíris por tecla o, si se ha elegido, por nota.
+pub fn button_color(st: &State, b: u8) -> Color32 {
+    if st.note_colors {
+        note_color(st.button_pc(b))
+    } else {
+        ACORDES[b as usize % 7]
+    }
+}
+
 /// Estrellas ganadas, abajo a la izquierda de la pantalla.
 fn stars_line(c: &Canvas, st: &State) {
     c.text(
@@ -842,7 +851,7 @@ fn stars_line(c: &Canvas, st: &State) {
 }
 
 /// *Cópiame*.
-fn simon_view(c: &Canvas, sm: &crate::state::Simon) {
+fn simon_view(c: &Canvas, sm: &crate::state::Simon, st: &State) {
     c.text(
         430.0,
         116.0,
@@ -864,7 +873,7 @@ fn simon_view(c: &Canvas, sm: &crate::state::Simon) {
         let x = 430.0 + (i as f32 - (n as f32 - 1.0) / 2.0) * 26.0;
         let on = sm.showing.is_none() && i < sm.pos;
         let fill = if on {
-            ACORDES[sm.seq[i] as usize]
+            button_color(st, sm.seq[i])
         } else {
             OLED_APAGADO.lerp_to_gamma(BLANCO, 0.25)
         };
@@ -904,7 +913,11 @@ fn follow_view(c: &Canvas, f: &crate::state::Follow, st: &State) {
     // Las próximas notas, de colores; la primera, grande.
     let notes = f.notes();
     for (k, &d) in notes.iter().skip(f.pos).take(9).enumerate() {
-        let col = ACORDES[(d % 7) as usize];
+        let col = if st.note_colors {
+            note_color(st.key.tonic + [0, 2, 4, 5, 7, 9, 11][(d % 7) as usize])
+        } else {
+            ACORDES[(d % 7) as usize]
+        };
         let x = 250.0 + k as f32 * 46.0;
         let r = if k == 0 { 24.0 } else { 15.0 };
         c.circle(x, 186.0, r, col);
@@ -941,7 +954,7 @@ fn follow_view(c: &Canvas, f: &crate::state::Follow, st: &State) {
 }
 
 /// Juego de oído.
-fn game_view(c: &Canvas, g: &crate::state::EarGame, extra: &Extra) {
+fn game_view(c: &Canvas, g: &crate::state::EarGame, extra: &Extra, st: &State) {
     c.text(
         430.0,
         116.0,
@@ -977,14 +990,15 @@ fn game_view(c: &Canvas, g: &crate::state::EarGame, extra: &Extra) {
                 } else {
                     0.0
                 };
-                c.circle(x, 186.0, 17.0 + pulse, ACORDES[i]);
+                let col = button_color(st, i as u8);
+                c.circle(x, 186.0, 17.0 + pulse, col);
                 c.text(
                     x,
                     186.0,
                     Align2::CENTER_CENTER,
                     i + 1,
                     16.0,
-                    texto_sobre(ACORDES[i]),
+                    texto_sobre(col),
                 );
             }
         }
@@ -1116,7 +1130,11 @@ fn sequencer_view(c: &Canvas, st: &State, extra: &Extra) {
 fn chord_buttons(c: &Canvas, st: &State) {
     for b in 0..7usize {
         let r = chord_button_rect(b);
-        let col = ACORDES[b];
+        let col = if matches!(st.play_mode, PlayMode::Bateria | PlayMode::Secuencia) {
+            ACORDES[b]
+        } else {
+            button_color(st, b as u8)
+        };
         let pressed = st.chord_held(b as u8);
         let lift = if pressed { 6.0 } else { 0.0 };
         let (x, y, w, h) = (r.min.x, r.min.y - lift, r.width(), r.height());

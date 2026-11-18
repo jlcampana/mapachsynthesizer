@@ -35,6 +35,8 @@ nota por tecla), Batería (las teclas tocan golpes), Ritmos (un ritmo suena solo
 acordes; `Intro` para y arranca) y Secuencia (16 pasos: en el mando, las 16 teclas; en el teclado,
 `1`–`8` y `Q`–`I`; ↑↓ eligen instrumento; perilla 2 sale con "Mi ritmo").
 
+Al cambiar de modo sale unos segundos una frase corta que lo explica, para leerla en voz alta.
+
 ## Looper
 
 `Espacio` (Grabar en el mando) graba la pista elegida y la para. La primera grabación marca la
@@ -76,6 +78,8 @@ Información del audio y del mando, y:
 
 - **Volumen máximo** (−24 a −3 dBFS, −12 por defecto): el techo que nada puede pasar.
 - **Nombres de acordes**: enseñar "Do", "Lam7"… en vez de números.
+- **Colores por nota**: Do rojo, Re naranja, Mi amarillo, Fa verde, Sol turquesa, La morado, Si rosa
+  (los colores de los tubos y campanas de clase), en vez de un arcoíris por tecla.
 - **Arrancar al encender**: abre Mapachsynthesizer al iniciar sesión.
 - **Aprender mando** y **Mando de serie**.
 - `Q` sale del programa; `Esc` vuelve.

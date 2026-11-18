@@ -65,3 +65,47 @@ pub fn fuentes(ctx: &egui::Context) {
     }
     ctx.set_fonts(defs);
 }
+
+/// Colores de las notas, los de los tubos y campanas de las clases de música (Rainbow mode):
+/// Do rojo, Re naranja, Mi amarillo, Fa verde, Sol turquesa, La morado, Si rosa. Los sostenidos,
+/// el color intermedio.
+pub fn note_color(pc: i32) -> Color32 {
+    const NATURALS: [(i32, Color32); 7] = [
+        (0, hex(0xFF3B3B)),
+        (2, hex(0xFF8A00)),
+        (4, hex(0xFFD400)),
+        (5, hex(0x2ED573)),
+        (7, hex(0x1ED6C8)),
+        (9, hex(0xB45CFF)),
+        (11, hex(0xFF5CE1)),
+    ];
+    let pc = pc.rem_euclid(12);
+    if let Some(&(_, c)) = NATURALS.iter().find(|(p, _)| *p == pc) {
+        return c;
+    }
+    let below = NATURALS
+        .iter()
+        .rev()
+        .find(|(p, _)| *p < pc)
+        .map_or(NATURALS[6].1, |x| x.1);
+    let above = NATURALS
+        .iter()
+        .find(|(p, _)| *p > pc)
+        .map_or(NATURALS[0].1, |x| x.1);
+    below.lerp_to_gamma(above, 0.5)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn colores_por_nota() {
+        assert_eq!(note_color(0), hex(0xFF3B3B));
+        assert_eq!(note_color(12), note_color(0));
+        assert_eq!(note_color(7), hex(0x1ED6C8));
+        // Do♯ queda entre rojo y naranja.
+        let cs = note_color(1);
+        assert!(cs != note_color(0) && cs != note_color(2));
+    }
+}

@@ -485,6 +485,7 @@ impl App {
                 self.send_all(vec![c]);
             }
             papa::PapaItem::Nombres => self.state.show_names = !self.state.show_names,
+            papa::PapaItem::ColoresNota => self.state.note_colors = !self.state.note_colors,
             papa::PapaItem::Arranque => {
                 let on = !papa::autostart_enabled();
                 if let Err(e) = papa::set_autostart(on) {
@@ -534,6 +535,7 @@ impl App {
             let value = match item {
                 papa::PapaItem::VolumenMaximo => format!("{:.0} dBFS", self.state.max_db),
                 papa::PapaItem::Nombres => si_no(self.state.show_names).into(),
+                papa::PapaItem::ColoresNota => si_no(self.state.note_colors).into(),
                 papa::PapaItem::Arranque => si_no(papa::autostart_enabled()).into(),
                 papa::PapaItem::Aprender | papa::PapaItem::MandoDeSerie => "Intro".into(),
             };

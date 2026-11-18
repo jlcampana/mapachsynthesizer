@@ -54,6 +54,8 @@ pub struct Ajustes {
     pub golpes: Vec<String>,
     /// Estrellas ganadas en los juegos.
     pub estrellas: u32,
+    /// Colores por nota en vez de por tecla.
+    pub colores_por_nota: bool,
 }
 
 const DIRS: [Direction; 8] = [
@@ -123,6 +125,7 @@ impl Ajustes {
                 .map(|g| g.clone().unwrap_or_default())
                 .collect(),
             estrellas: s.stars,
+            colores_por_nota: s.note_colors,
         }
     }
 
@@ -147,6 +150,7 @@ impl Ajustes {
         s.bpm = self.tempo.clamp(BPM_MIN, BPM_MAX);
         s.bass = self.bajo;
         s.show_names = self.nombres;
+        s.note_colors = self.colores_por_nota;
         s.play_mode = PlayMode::ALL[self.modo % PlayMode::ALL.len()];
         s.arp_pattern = self.patron % ARP_PATTERNS.len();
         s.arp_rate = self.figura % RATES.len();
