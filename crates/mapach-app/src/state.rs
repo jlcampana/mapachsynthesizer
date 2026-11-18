@@ -293,6 +293,8 @@ pub struct State {
     pub song_focus: SongFocus,
     /// Canciones en la lista (lo dice la app al leer la carpeta).
     pub song_count: usize,
+    /// Colores fijados en cada tecla (chord lock).
+    pub locks: [Option<Direction>; BUTTONS],
     /// Juego de oído en marcha.
     pub game: Option<EarGame>,
     /// Volumen máximo en dBFS (techo del limitador; se cambia en el modo papá).
@@ -376,6 +378,7 @@ impl Default for State {
             screen: Screen::Tocar,
             song_focus: SongFocus::Card(0),
             song_count: 0,
+            locks: [None; BUTTONS],
             game: None,
             max_db: mapach_engine::DEFAULT_MAX_DB,
             presets: Default::default(),
@@ -800,11 +803,17 @@ impl State {
         self.arrow_dir().or(Direction::KNOB_CYCLE[self.knob_color])
     }
 
+    /// Dirección para una tecla: flechas, luego perilla mágica, luego el color fijado.
+    pub fn dir_for(&self, button: u8) -> Option<Direction> {
+        self.dir()
+            .or_else(|| self.locks.get(button as usize).copied().flatten())
+    }
+
     /// Acorde que tocaría la tecla `button` con la dirección actual.
     pub fn chord_for(&self, button: u8, high: bool) -> Chord {
         let mut c = self
             .mod_mode
-            .apply(self.key.chord(button as usize), self.dir());
+            .apply(self.key.chord(button as usize), self.dir_for(button));
         if high {
             c.root += 12;
         }
@@ -983,6 +992,19 @@ impl State {
                     // Salir del secuenciador: el ritmo sigue como "Mi ritmo".
                     self.drum_style = STYLES.len();
                     self.set_play_mode(PlayMode::Ritmos, out);
+                } else if let Some(sounding) = &self.current {
+                    // Con un acorde pulsado: fijar su color en esa tecla (o soltarlo).
+                    let b = sounding.button as usize;
+                    let dir = self.dir();
+                    self.locks[b] = if dir.is_some() && self.locks[b] != dir {
+                        self.show_toast("🔒 Color fijado");
+                        dir
+                    } else {
+                        self.show_toast("🔓 Color normal");
+                        None
+                    };
+                    self.knob_color = 0;
+                    self.revoice(out);
                 }
             }
             Control::KnobPress(Knob::Tempo) | Control::Tap => {
@@ -1491,7 +1513,7 @@ impl State {
             button,
             high,
             chord,
-            dir: self.dir(),
+            dir: self.dir_for(button),
             notes,
         });
     }
@@ -1501,7 +1523,7 @@ impl State {
         if let Some(s) = &self.current {
             let (b, h) = (s.button, s.high);
             let before = (s.chord, s.dir);
-            if (self.chord_for(b, h), self.dir()) != before {
+            if (self.chord_for(b, h), self.dir_for(b)) != before {
                 self.play_chord(b, h, false, out);
             }
         }
@@ -1957,6 +1979,32 @@ mod tests {
         press(&mut s, Control::Preset(3));
         let c = release(&mut s, Control::Preset(3));
         assert!(c.is_empty());
+    }
+
+    #[test]
+    fn fijar_el_color_de_un_acorde() {
+        let mut s = State::default();
+        press(&mut s, Control::Chord(0));
+        s.handle(Event::Turn(Knob::Magica, 2), 0.0); // 7ª
+        press(&mut s, Control::KnobPress(Knob::Magica));
+        release(&mut s, Control::Chord(0));
+        assert_eq!(s.locks[0], Some(Direction::Right));
+        // Al volver a tocarla, suena con su color fijado; las demás, normal.
+        press(&mut s, Control::Chord(0));
+        assert_eq!(s.current.as_ref().unwrap().chord.kind, ChordType::Maj7);
+        release(&mut s, Control::Chord(0));
+        press(&mut s, Control::Chord(3));
+        assert_eq!(s.current.as_ref().unwrap().chord.kind, ChordType::Major);
+        release(&mut s, Control::Chord(3));
+        // Las flechas siguen mandando.
+        press(&mut s, Control::Arrow(Arrow::Down));
+        press(&mut s, Control::Chord(0));
+        assert_eq!(s.current.as_ref().unwrap().chord.kind, ChordType::Sus4);
+        release(&mut s, Control::Arrow(Arrow::Down));
+        assert_eq!(s.current.as_ref().unwrap().chord.kind, ChordType::Maj7);
+        // Pulsar la perilla sin color la suelta.
+        press(&mut s, Control::KnobPress(Knob::Magica));
+        assert_eq!(s.locks[0], None);
     }
 
     #[test]

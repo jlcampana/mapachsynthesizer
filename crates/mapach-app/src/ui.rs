@@ -1031,6 +1031,17 @@ fn chord_buttons(c: &Canvas, st: &State) {
         } else {
             c.text(cx, y + 52.0, Align2::CENTER_CENTER, b + 1, 52.0, tc);
         }
+        if st.locks[b].is_some() && !matches!(st.play_mode, PlayMode::Bateria | PlayMode::Secuencia)
+        {
+            c.text(
+                x + w - 18.0,
+                y + 18.0,
+                Align2::CENTER_CENTER,
+                "🔒",
+                14.0,
+                tc,
+            );
+        }
         c.text(
             cx,
             y + 104.0,

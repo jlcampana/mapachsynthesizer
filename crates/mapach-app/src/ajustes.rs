@@ -6,7 +6,7 @@ use mapach_dsp::drums::KITS;
 use mapach_dsp::effects::Effect;
 use mapach_engine::drums::{STYLES, VARIATIONS};
 use mapach_engine::{ARP_PATTERNS, RATES, SOUNDS, STRUM_MS};
-use mapach_theory::{Key, ModifierMode, Scale};
+use mapach_theory::{Direction, Key, ModifierMode, Scale};
 use serde::{Deserialize, Serialize};
 
 use crate::state::{BPM_MAX, BPM_MIN, PlayMode, State};
@@ -48,7 +48,20 @@ pub struct Ajustes {
     pub presets: Vec<Option<Ajustes>>,
     /// Volumen máximo en dBFS.
     pub volumen_maximo: f32,
+    /// Color fijado en cada tecla (−1 = ninguno; si no, posición en `DIRS`).
+    pub fijados: Vec<i8>,
 }
+
+const DIRS: [Direction; 8] = [
+    Direction::Up,
+    Direction::UpRight,
+    Direction::Right,
+    Direction::DownRight,
+    Direction::Down,
+    Direction::DownLeft,
+    Direction::Left,
+    Direction::UpLeft,
+];
 
 impl Default for Ajustes {
     fn default() -> Self {
@@ -95,6 +108,11 @@ impl Ajustes {
                 .map(|p| p.as_ref().map(|b| (**b).clone()))
                 .collect(),
             volumen_maximo: s.max_db,
+            fijados: s
+                .locks
+                .iter()
+                .map(|l| l.map_or(-1, |d| pos(&DIRS, &d) as i8))
+                .collect(),
         }
     }
 
@@ -127,6 +145,9 @@ impl Ajustes {
             }
         }
         s.max_db = self.volumen_maximo.clamp(-24.0, -3.0);
+        for (dst, &src) in s.locks.iter_mut().zip(&self.fijados) {
+            *dst = usize::try_from(src).ok().and_then(|i| DIRS.get(i)).copied();
+        }
         s.effect = Effect::ALL[self.efecto % Effect::ALL.len()];
         s.effect_amount = self.cantidad.clamp(0.0, 1.0);
         s.reverb = self.sala.clamp(0.0, 1.0);
@@ -182,6 +203,7 @@ mod tests {
         s.play_mode = PlayMode::Arpegio;
         s.bpm = 95.0;
         s.seq_pattern[3] = 0b101;
+        s.locks[2] = Some(Direction::DownLeft);
         s.drum_style = 7;
         let a = Ajustes::from_state(&s);
         let text = ron::to_string(&a).unwrap();
