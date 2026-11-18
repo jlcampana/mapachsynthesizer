@@ -272,6 +272,11 @@ impl App {
                         | Action::UseSample
                         | Action::DrumSample(_)
                         | Action::AssignShortcut(_)
+                        | Action::OpenPicker(_)
+                        | Action::PreviewPick(_)
+                        | Action::ToggleFavorite(_)
+                        | Action::AssignPick { .. }
+                        | Action::ClosePicker
                 )
             });
         for a in taller_actions {
@@ -462,6 +467,62 @@ impl App {
                         .show_toast(format!("⚡ El atajo {} suena a «{name}»", i + 1));
                 }
             }
+            Action::OpenPicker(_) => {
+                t.read_picks(&self.state.favorites);
+                self.state.picker_count = t.picks.len();
+                if t.picks.is_empty() {
+                    self.state.picker = None;
+                    self.state
+                        .show_toast("No hay samples: deja MP3, OGG o WAV en Música › Mapachsynthesizer › Samples");
+                } else if let Some((data, _, _)) = t.load_pick(0) {
+                    link.send(Command::Preview(Some(data)));
+                }
+            }
+            Action::PreviewPick(i) => {
+                if let Some((data, _, _)) = t.load_pick(i) {
+                    link.send(Command::Preview(Some(data)));
+                }
+            }
+            Action::ToggleFavorite(i) => {
+                if let Some(file) = t.pick_file(i) {
+                    let favs = &mut self.state.favorites;
+                    let fav = if let Some(pos) = favs.iter().position(|f| *f == file) {
+                        favs.remove(pos);
+                        false
+                    } else {
+                        favs.push(file.clone());
+                        true
+                    };
+                    // Reordenar sin perder el sample elegido.
+                    t.read_picks(&self.state.favorites);
+                    self.state.picker_count = t.picks.len();
+                    let new = (0..t.picks.len())
+                        .find(|&j| t.pick_file(j).as_deref() == Some(&file))
+                        .unwrap_or(0);
+                    if let Some(p) = &mut self.state.picker {
+                        p.sel = new;
+                    }
+                    self.state.show_toast(if fav {
+                        "★ Favorito"
+                    } else {
+                        "☆ Ya no es favorito"
+                    });
+                }
+            }
+            Action::AssignPick { shortcut, pick } => match t.load_pick(pick) {
+                Some((data, name, path)) => {
+                    link.send(Command::SetShortcut {
+                        slot: shortcut,
+                        data: Some(data),
+                    });
+                    self.state.shortcuts[shortcut as usize] =
+                        Some(path.to_string_lossy().into_owned());
+                    self.state
+                        .show_toast(format!("⚡ El atajo {} suena a «{name}»", shortcut + 1));
+                }
+                None => self.state.show_toast("Ese fichero no se puede leer 😕"),
+            },
+            Action::ClosePicker => t.stop_preview(link),
             Action::UseSample => {
                 if let Some((data, root, name, path)) = t.for_instrument() {
                     link.send(Command::SetSample {
@@ -766,6 +827,7 @@ impl eframe::App for App {
             rec_level: t.rec_level,
             rec_seconds: t.rec_seconds,
             seconds: t.current.as_ref().map_or(0.0, |c| c.1.seconds()),
+            picks: &t.picks,
         });
         ui::draw(
             &canvas,

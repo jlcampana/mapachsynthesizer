@@ -120,6 +120,8 @@ pub struct TallerView<'a> {
     pub rec_level: f32,
     pub rec_seconds: f32,
     pub seconds: f32,
+    /// Lista de samples para los atajos.
+    pub picks: &'a [mapach_samples::library::Entry],
 }
 
 /// Lo que hace falta para dibujar la pantalla de canciones.
@@ -323,6 +325,10 @@ fn screen(c: &Canvas, st: &State, extra: &Extra) {
         .menu_held()
         .map(|m| (m, None))
         .or(st.open_menu.map(|o| (o.menu, Some(o.item))));
+    if let (Some(p), Some(tv)) = (st.picker, &extra.taller) {
+        picker_view(c, st, p, tv.picks);
+        return;
+    }
     if let Some((m, sel)) = menu {
         // Los menús usan toda la pantalla (sin piano ni osciloscopio).
         menu_page(c, st, m, sel);
@@ -967,6 +973,105 @@ pub fn button_color(st: &State, b: u8) -> Color32 {
     } else {
         ACORDES[b as usize % 7]
     }
+}
+
+/// Lista de samples para elegir el de un atajo.
+fn picker_view(
+    c: &Canvas,
+    st: &State,
+    p: crate::state::Picker,
+    picks: &[mapach_samples::library::Entry],
+) {
+    c.rect(174.0, 92.0, 160.0, 28.0, 8.0, hex(0x3A3346));
+    c.text(
+        254.0,
+        106.0,
+        Align2::CENTER_CENTER,
+        format!("⚡ Atajo {}", p.shortcut + 1),
+        16.0,
+        TEXTO,
+    );
+    c.text(
+        690.0,
+        106.0,
+        Align2::RIGHT_CENTER,
+        "Rueda: elegir · Centro: ★ · OK: poner · Pulsar rueda: salir",
+        12.0,
+        TEXTO_2,
+    );
+    let n = picks.len();
+    if n == 0 {
+        c.text(
+            430.0,
+            220.0,
+            Align2::CENTER_CENTER,
+            "No hay samples en Música › Mapachsynthesizer › Samples",
+            16.0,
+            TEXTO_2,
+        );
+        return;
+    }
+    // 7 filas, con la elegida en el centro; la lista da la vuelta.
+    const ROWS: usize = 7;
+    let half = ROWS as i64 / 2;
+    for r in 0..ROWS.min(n) {
+        let offset = r as i64 - half.min((n as i64 - 1) / 2);
+        let i = (p.sel as i64 + offset).rem_euclid(n as i64) as usize;
+        let e = &picks[i];
+        let y = 150.0 + r as f32 * 30.0;
+        let sel = i == p.sel;
+        if sel {
+            c.rect(
+                170.0,
+                y - 13.0,
+                520.0,
+                26.0,
+                6.0,
+                ACENTO.gamma_multiply(0.25),
+            );
+        }
+        let file = e
+            .path
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let fav = st.favorites.contains(&file);
+        c.text(
+            186.0,
+            y,
+            Align2::LEFT_CENTER,
+            if fav { "★" } else { "☆" },
+            15.0,
+            if fav {
+                ACENTO
+            } else {
+                TEXTO_2.gamma_multiply(0.5)
+            },
+        );
+        c.rect(208.0, y - 6.0, 12.0, 12.0, 3.0, rgb(e.color));
+        let ext = e
+            .path
+            .extension()
+            .map(|x| x.to_string_lossy().to_uppercase())
+            .unwrap_or_default();
+        c.text(
+            230.0,
+            y,
+            Align2::LEFT_CENTER,
+            &e.name,
+            16.0,
+            if sel { TEXTO } else { TEXTO_2 },
+        );
+        c.text(674.0, y, Align2::RIGHT_CENTER, ext, 11.0, TEXTO_2);
+    }
+    c.text(
+        430.0,
+        352.0,
+        Align2::CENTER_CENTER,
+        format!("{} de {n}", p.sel + 1),
+        11.0,
+        TEXTO_2,
+    );
 }
 
 /// Estrellas ganadas, abajo a la izquierda de la pantalla.

@@ -17,6 +17,8 @@ pub const OVERVIEW: usize = 120;
 
 pub struct Taller {
     pub list: Vec<Entry>,
+    /// Lista de samples para elegir el de un atajo (favoritos primero).
+    pub picks: Vec<Entry>,
     /// Sample elegido: posición en la lista y audio.
     pub current: Option<(usize, Sample)>,
     pub overview: Vec<f32>,
@@ -38,6 +40,7 @@ impl Taller {
     pub fn new() -> Self {
         Self {
             list: Vec::new(),
+            picks: Vec::new(),
             current: None,
             overview: vec![0.0; OVERVIEW],
             root: None,
@@ -240,6 +243,32 @@ impl Taller {
                 None
             }
         }
+    }
+}
+
+impl Taller {
+    /// Lee la carpeta de samples para la lista de los atajos, con los favoritos arriba.
+    pub fn read_picks(&mut self, favorites: &[String]) {
+        let _ = std::fs::create_dir_all(&self.dir);
+        self.picks = library::list_in(&self.dir);
+        library::favorites_first(&mut self.picks, favorites);
+    }
+
+    /// Nombre de fichero de un sample de la lista (para los favoritos).
+    pub fn pick_file(&self, i: usize) -> Option<String> {
+        self.picks
+            .get(i)?
+            .path
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+    }
+
+    /// Carga un sample de la lista, recortado y normalizado.
+    pub fn load_pick(&self, i: usize) -> Option<(Arc<[f32]>, String, PathBuf)> {
+        let e = self.picks.get(i)?;
+        let mut s = library::load(&e.path).ok()?;
+        s.tidy();
+        (!s.is_empty()).then(|| (Arc::from(s.data.as_slice()), e.name.clone(), e.path.clone()))
     }
 }
 

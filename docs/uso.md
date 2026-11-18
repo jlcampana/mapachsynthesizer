@@ -95,8 +95,17 @@ intentar. Los juegos dan **estrellas** ⭐ y con 10 y 25 se desbloquean dos soni
 ## Atajos a samples
 
 La fila 3 del mando (en el teclado, `V N M ,`) son 4 atajos: cada uno dispara un sample entero, que
-también se graba en el looper. Para ponerle un sonido a un atajo: en el Taller, elige el sonido con
-la rueda, mantén el botón amarillo y pulsa el atajo. Hacerlo otra vez con el mismo sonido lo vacía.
+también se graba en el looper.
+
+- **Elegir el sample de un atajo:** mantén el atajo y pulsa **OK**. Sale la lista de samples de la
+  carpeta `Música/Mapachsynthesizer/Samples`: la rueda grande la recorre (y da la vuelta), cada
+  sample suena al pasar por él, la **perilla central** lo marca como favorito ★ (los favoritos
+  salen arriba) y **OK** lo pone en el atajo. Pulsar la rueda o un botón de color cierra la lista.
+- **Vaciar un atajo:** mantenlo pulsado y pulsa la perilla central.
+- También se puede desde el Taller: con un sonido elegido, mantén amarillo y pulsa el atajo.
+
+En la carpeta `Samples` se pueden dejar directamente ficheros WAV, MP3, OGG o FLAC descargados de
+internet: la app los lee tal cual.
 
 ## Presets
 

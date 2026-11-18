@@ -139,6 +139,26 @@ pub enum Action {
     DrumSample(u8),
     /// Poner (o quitar) el sample elegido en el atajo `n`.
     AssignShortcut(u8),
+    /// Abrir la lista de samples para el atajo `n` (hay que leer la carpeta).
+    OpenPicker(u8),
+    /// Escuchar el sample `n` de la lista.
+    PreviewPick(usize),
+    /// Marcar o desmarcar como favorito el sample `n` de la lista.
+    ToggleFavorite(usize),
+    /// Poner el sample `pick` de la lista en el atajo `shortcut`.
+    AssignPick {
+        shortcut: u8,
+        pick: usize,
+    },
+    /// Cerrar la lista (deja de sonar).
+    ClosePicker,
+}
+
+/// Lista de samples para elegir el de un atajo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Picker {
+    pub shortcut: u8,
+    pub sel: usize,
 }
 
 /// Fila elegida en la pantalla de canciones.
@@ -335,6 +355,12 @@ pub struct State {
     pub song_count: usize,
     /// Samples de los atajos (ruta).
     pub shortcuts: [Option<String>; mapach_engine::SHORTCUTS],
+    /// Lista de samples abierta (para un atajo).
+    pub picker: Option<Picker>,
+    /// Samples en la lista (lo dice la app al leer la carpeta).
+    pub picker_count: usize,
+    /// Samples favoritos (nombre de fichero): salen arriba de la lista.
+    pub favorites: Vec<String>,
     /// Atajos pulsados (para el dibujo del mando).
     pub shortcut_held: [bool; mapach_engine::SHORTCUTS],
     /// Samples puestos en cada golpe de batería (ruta).
@@ -440,6 +466,9 @@ impl Default for State {
             locks: [None; BUTTONS],
             drum_samples: Default::default(),
             shortcuts: Default::default(),
+            picker: None,
+            picker_count: 0,
+            favorites: Vec::new(),
             shortcut_held: [false; mapach_engine::SHORTCUTS],
             game: None,
             simon: None,
@@ -757,6 +786,8 @@ impl State {
             self.preset_hold = None;
             let mut a = crate::ajustes::Ajustes::from_state(self);
             a.presets.clear();
+            // Los favoritos son de la biblioteca, no del preset.
+            a.favoritos.clear();
             self.presets[p] = Some(Box::new(a));
             self.show_toast(format!("💾 Guardado en F{}", p + 1));
         }
@@ -884,6 +915,7 @@ impl State {
 
     /// Suelta todo lo pulsado (al perder el foco o abrir el modo papá).
     pub fn release_all(&mut self) {
+        self.picker = None;
         self.shortcut_held = [false; mapach_engine::SHORTCUTS];
         self.play_held = None;
         self.preset_hold = None;
@@ -990,8 +1022,78 @@ impl State {
         out
     }
 
+    /// Controles con la lista de samples abierta. Devuelve `true` si el control se ha usado.
+    fn picker_press(&mut self, c: Control, out: &mut Vec<Command>) -> bool {
+        let Some(p) = self.picker else { return false };
+        match c {
+            // OK: poner el sample en el atajo.
+            Control::Play => {
+                if self.picker_count > 0 {
+                    self.actions.push(Action::AssignPick {
+                        shortcut: p.shortcut,
+                        pick: p.sel,
+                    });
+                }
+                self.picker = None;
+                self.actions.push(Action::ClosePicker);
+            }
+            // Perilla central: favorito.
+            Control::KnobPress(Knob::Tempo) => {
+                if self.picker_count > 0 {
+                    self.actions.push(Action::ToggleFavorite(p.sel));
+                }
+            }
+            // Cancelar: pulsar la rueda, un botón de color o el atajo.
+            Control::KnobPress(Knob::Cursor)
+            | Control::Menu(_)
+            | Control::Shortcut(_)
+            | Control::Canciones
+            | Control::Taller => {
+                if let Control::Menu(m) = c {
+                    // Que al soltarlo no se abra su página.
+                    self.menus_held[menu_idx(m)] = true;
+                    self.menu_used = true;
+                }
+                self.picker = None;
+                self.actions.push(Action::ClosePicker);
+            }
+            // El volumen sigue funcionando; lo demás no hace nada con la lista abierta.
+            Control::KnobPress(Knob::Volumen) => return false,
+            _ => {}
+        }
+        let _ = out;
+        true
+    }
+
     fn press(&mut self, c: Control, now: f64, out: &mut Vec<Command>) {
         self.now = self.now.max(now);
+        if self.picker_press(c, out) {
+            return;
+        }
+        // Con un atajo pulsado: OK abre la lista de samples y la perilla central lo vacía.
+        if let Some(i) = self.shortcut_held.iter().position(|&h| h) {
+            match c {
+                Control::Play => {
+                    self.picker = Some(Picker {
+                        shortcut: i as u8,
+                        sel: 0,
+                    });
+                    self.actions.push(Action::OpenPicker(i as u8));
+                    return;
+                }
+                Control::KnobPress(Knob::Tempo) => {
+                    if self.shortcuts[i].take().is_some() {
+                        out.push(Command::SetShortcut {
+                            slot: i as u8,
+                            data: None,
+                        });
+                        self.show_toast(format!("Atajo {} vacío", i + 1));
+                    }
+                    return;
+                }
+                _ => {}
+            }
+        }
         if self.screen == Screen::Canciones && self.songs_press(c) {
             return;
         }
@@ -1055,9 +1157,7 @@ impl State {
                 if self.shortcuts[i as usize].is_some() {
                     out.push(Command::PlayShortcut(i));
                 } else {
-                    self.show_toast(
-                        "Atajo vacío: en el Taller, mantén amarillo y pulsa esta tecla",
-                    );
+                    self.show_toast("Atajo vacío: mantenlo pulsado y pulsa OK para elegir sample");
                 }
             }
             Control::Canciones => self.open_songs(),
@@ -1340,6 +1440,16 @@ impl State {
     }
 
     fn turn(&mut self, k: Knob, d: i32, out: &mut Vec<Command>) {
+        if let Some(p) = &mut self.picker
+            && k == Knob::Cursor
+        {
+            // La lista da la vuelta: del último se pasa al primero (los favoritos).
+            if self.picker_count > 0 {
+                p.sel = wrap(p.sel, d, self.picker_count);
+                self.actions.push(Action::PreviewPick(p.sel));
+            }
+            return;
+        }
         if self.screen == Screen::Taller && k == Knob::Cursor {
             if let Some(used) = &mut self.play_held {
                 // OK mantenido + rueda: elegir el botón de destrozar.
@@ -2482,6 +2592,61 @@ mod tests {
         press(&mut s, Control::Shortcut(2));
         release(&mut s, Control::Menu(Menu::Sonido));
         assert_eq!(s.take_actions(), [Action::AssignShortcut(2)]);
+    }
+
+    #[test]
+    fn lista_de_samples_para_un_atajo() {
+        let mut s = State::default();
+        // Mantener el atajo 2 y pulsar OK abre la lista.
+        press(&mut s, Control::Pad(10));
+        press(&mut s, Control::Play);
+        release(&mut s, Control::Play);
+        release(&mut s, Control::Pad(10));
+        assert_eq!(s.take_actions(), [Action::OpenPicker(1)]);
+        s.picker_count = 3;
+        // La rueda recorre la lista y da la vuelta.
+        s.handle(Event::Turn(Knob::Cursor, -1), 0.0);
+        assert_eq!(s.picker.unwrap().sel, 2);
+        s.handle(Event::Turn(Knob::Cursor, 1), 0.0);
+        assert_eq!(s.picker.unwrap().sel, 0);
+        assert_eq!(
+            s.take_actions(),
+            [Action::PreviewPick(2), Action::PreviewPick(0)]
+        );
+        // La perilla central marca favorito.
+        press(&mut s, Control::KnobPress(Knob::Tempo));
+        assert_eq!(s.take_actions(), [Action::ToggleFavorite(0)]);
+        // OK lo pone en el atajo y cierra.
+        press(&mut s, Control::Play);
+        assert_eq!(
+            s.take_actions(),
+            [
+                Action::AssignPick {
+                    shortcut: 1,
+                    pick: 0
+                },
+                Action::ClosePicker
+            ]
+        );
+        assert!(s.picker.is_none());
+        // Soltar OK no hace play.
+        assert!(release(&mut s, Control::Play).is_empty());
+    }
+
+    #[test]
+    fn atajo_pulsado_mas_perilla_central_lo_vacia() {
+        let mut s = State::default();
+        s.shortcuts[0] = Some("a.wav".into());
+        press(&mut s, Control::Shortcut(0));
+        let c = press(&mut s, Control::KnobPress(Knob::Tempo));
+        assert_eq!(
+            c,
+            [Command::SetShortcut {
+                slot: 0,
+                data: None
+            }]
+        );
+        assert!(s.shortcuts[0].is_none());
     }
 
     #[test]

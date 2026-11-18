@@ -58,6 +58,8 @@ pub struct Ajustes {
     pub colores_por_nota: bool,
     /// Samples de los atajos ("" = vacío).
     pub atajos: Vec<String>,
+    /// Samples favoritos (nombre de fichero).
+    pub favoritos: Vec<String>,
 }
 
 const DIRS: [Direction; 8] = [
@@ -133,6 +135,7 @@ impl Ajustes {
                 .iter()
                 .map(|g| g.clone().unwrap_or_default())
                 .collect(),
+            favoritos: s.favorites.clone(),
         }
     }
 
@@ -173,6 +176,10 @@ impl Ajustes {
             }
         }
         s.max_db = self.volumen_maximo.clamp(-24.0, -3.0);
+        // Los favoritos no van en los presets: solo se leen si vienen.
+        if !self.favoritos.is_empty() {
+            s.favorites = self.favoritos.clone();
+        }
         for (dst, src) in s.shortcuts.iter_mut().zip(&self.atajos) {
             *dst = (!src.is_empty()).then(|| src.clone());
         }
