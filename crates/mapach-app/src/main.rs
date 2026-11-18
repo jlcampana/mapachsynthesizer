@@ -4,6 +4,7 @@ mod ajustes;
 mod canciones;
 mod captura;
 mod keyboard;
+mod papa;
 mod state;
 mod taller;
 mod theme;
@@ -73,6 +74,7 @@ struct App {
     mando_status_rx: Receiver<mando::Status>,
     mando_status: mando::Status,
     papa: bool,
+    papa_sel: usize,
     /// Tecla de acorde pulsada con el ratón o el dedo.
     pointer_chord: Option<u8>,
     focused: bool,
@@ -146,6 +148,7 @@ impl App {
             mando_status_rx,
             mando_status: mando::Status::Buscando,
             papa: false,
+            papa_sel: 0,
             pointer_chord: None,
             focused: true,
             wheel: 0.0,
@@ -157,6 +160,7 @@ impl App {
         };
         if let Some(cap) = &app.captura {
             cap.fake_taller(&mut app.taller);
+            app.papa = cap.demo == 14;
         }
         // El sample que se usaba como instrumento.
         if let Some(path) = instrument
@@ -386,6 +390,39 @@ impl App {
         }
     }
 
+    /// Teclas en el modo papá: ↑↓ eligen, ←→ cambian.
+    fn papa_key(&mut self, key: egui::Key) {
+        let n = papa::PapaItem::ALL.len();
+        let d = match key {
+            egui::Key::ArrowUp => {
+                self.papa_sel = (self.papa_sel + n - 1) % n;
+                return;
+            }
+            egui::Key::ArrowDown => {
+                self.papa_sel = (self.papa_sel + 1) % n;
+                return;
+            }
+            egui::Key::ArrowLeft => -1.0,
+            egui::Key::ArrowRight | egui::Key::Enter => 1.0,
+            _ => return,
+        };
+        match papa::PapaItem::ALL[self.papa_sel] {
+            papa::PapaItem::VolumenMaximo => {
+                let (lo, hi) = papa::MAX_DB_RANGE;
+                self.state.max_db = (self.state.max_db + d).clamp(lo, hi);
+                let c = Command::SetParam(mapach_engine::Param::MaxLevelDb(self.state.max_db));
+                self.send_all(vec![c]);
+            }
+            papa::PapaItem::Nombres => self.state.show_names = !self.state.show_names,
+            papa::PapaItem::Arranque => {
+                let on = !papa::autostart_enabled();
+                if let Err(e) = papa::set_autostart(on) {
+                    eprintln!("Arranque automático: {e}");
+                }
+            }
+        }
+    }
+
     fn papa_lines(&self) -> Vec<String> {
         let mut v = Vec::new();
         match &self.audio {
@@ -402,11 +439,18 @@ impl App {
             None => v.push("Sin audio".into()),
         }
         v.push(format!("Mando: {}", status_text(self.mando_status)));
-        v.push(format!(
-            "Volumen máximo: {} dBFS",
-            mapach_engine::DEFAULT_MAX_DB
-        ));
         v.push(format!("Versión {}", env!("CARGO_PKG_VERSION")));
+        v.push(String::new());
+        let si_no = |b: bool| if b { "sí" } else { "no" };
+        for (i, item) in papa::PapaItem::ALL.iter().enumerate() {
+            let value = match item {
+                papa::PapaItem::VolumenMaximo => format!("{:.0} dBFS", self.state.max_db),
+                papa::PapaItem::Nombres => si_no(self.state.show_names).into(),
+                papa::PapaItem::Arranque => si_no(papa::autostart_enabled()).into(),
+            };
+            let mark = if i == self.papa_sel { "▶" } else { "  " };
+            v.push(format!("{mark} {}: ◀ {value} ▶", item.label()));
+        }
         v
     }
 }
@@ -495,6 +539,9 @@ impl eframe::App for App {
                             || (key == egui::Key::P && modifiers.ctrl && modifiers.alt))
                     {
                         self.papa = false;
+                    }
+                    if pressed {
+                        self.papa_key(key);
                     }
                     continue;
                 }

@@ -46,6 +46,8 @@ pub struct Ajustes {
     pub mi_sample: String,
     /// Presets F1–F4.
     pub presets: Vec<Option<Ajustes>>,
+    /// Volumen máximo en dBFS.
+    pub volumen_maximo: f32,
 }
 
 impl Default for Ajustes {
@@ -92,6 +94,7 @@ impl Ajustes {
                 .iter()
                 .map(|p| p.as_ref().map(|b| (**b).clone()))
                 .collect(),
+            volumen_maximo: s.max_db,
         }
     }
 
@@ -123,6 +126,7 @@ impl Ajustes {
                 *dst = src.clone().map(Box::new);
             }
         }
+        s.max_db = self.volumen_maximo.clamp(-24.0, -3.0);
         s.effect = Effect::ALL[self.efecto % Effect::ALL.len()];
         s.effect_amount = self.cantidad.clamp(0.0, 1.0);
         s.reverb = self.sala.clamp(0.0, 1.0);

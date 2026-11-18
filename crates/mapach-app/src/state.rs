@@ -274,6 +274,8 @@ pub struct State {
     pub song_focus: SongFocus,
     /// Canciones en la lista (lo dice la app al leer la carpeta).
     pub song_count: usize,
+    /// Volumen máximo en dBFS (techo del limitador; se cambia en el modo papá).
+    pub max_db: f32,
     /// Presets rápidos F1–F4 (como P1–P4 del HiChord).
     pub presets: [Option<Box<crate::ajustes::Ajustes>>; 4],
     /// Preset que se mantiene pulsado y desde cuándo (mantener = guardar).
@@ -353,6 +355,7 @@ impl Default for State {
             screen: Screen::Tocar,
             song_focus: SongFocus::Card(0),
             song_count: 0,
+            max_db: mapach_engine::DEFAULT_MAX_DB,
             presets: Default::default(),
             preset_hold: None,
             instrument: None,
@@ -414,6 +417,7 @@ impl State {
             Command::SetParam(Param::Release(self.release)),
             Command::SetParam(Param::Brightness(self.brightness)),
             Command::SetParam(Param::Volume(self.effective_volume())),
+            Command::SetParam(Param::MaxLevelDb(self.max_db)),
             Command::SetStyle(self.style()),
             Command::SetBpm(self.bpm),
             Command::SetKit(self.kit as u8),
@@ -628,7 +632,10 @@ impl State {
         }
         out.push(Command::StopChord);
         let was_drums = self.drums_playing;
+        // El volumen máximo lo decide el modo papá, no los presets.
+        let max_db = self.max_db;
         a.apply(self);
+        self.max_db = max_db;
         out.extend(self.initial_commands());
         let drums = self.play_mode.is_drums() && (was_drums || self.play_mode != PlayMode::Bateria);
         self.set_drums_playing(drums, out);
