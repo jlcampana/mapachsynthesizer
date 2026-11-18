@@ -942,6 +942,7 @@ impl eframe::App for App {
             busy: s.busy.as_deref(),
             saved_ago: s.last_saved.map(|t| now - t),
             last_export: s.last_export.as_deref(),
+            saved: s.is_saved(),
         });
         let t = &self.taller;
         let taller_view = Some(ui::TallerView {

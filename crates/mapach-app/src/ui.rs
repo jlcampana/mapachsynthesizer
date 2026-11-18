@@ -133,6 +133,8 @@ pub struct SongsView<'a> {
     /// Segundos desde el último guardado.
     pub saved_ago: Option<f64>,
     pub last_export: Option<&'a std::path::Path>,
+    /// ¿La canción actual está guardada?
+    pub saved: bool,
 }
 
 pub fn draw(c: &Canvas, st: &State, extra: &Extra) {
@@ -143,7 +145,7 @@ pub fn draw(c: &Canvas, st: &State, extra: &Extra) {
     } else if st.screen == Screen::Taller {
         taller_screen(c, st, extra);
     } else {
-        top_bar(c, st);
+        top_bar(c, st, extra);
         sidebar(c, st);
         screen(c, st, extra);
         mando_panel(c, st);
@@ -169,21 +171,33 @@ pub fn draw(c: &Canvas, st: &State, extra: &Extra) {
 }
 
 /// Barra de arriba: modo, pantallita LCD con tempo, tono y sonido, y transporte.
-fn top_bar(c: &Canvas, st: &State) {
+fn top_bar(c: &Canvas, st: &State, extra: &Extra) {
     c.rect(0.0, 0.0, W, 62.0, 0.0, PANEL);
     c.line(&[(0.0, 62.0), (W, 62.0)], 1.0, BORDE);
 
     // Modo.
-    c.rect(16.0, 14.0, 168.0, 34.0, 8.0, PANEL_2);
-    c.rect(16.0, 14.0, 5.0, 34.0, 2.0, MENU_ROJO);
+    c.rect(12.0, 14.0, 130.0, 34.0, 8.0, PANEL_2);
+    c.rect(12.0, 14.0, 5.0, 34.0, 2.0, MENU_ROJO);
     c.text(
-        34.0,
+        26.0,
         31.0,
         Align2::LEFT_CENTER,
         st.play_mode.badge(),
-        15.0,
+        13.0,
         TEXTO,
     );
+
+    // Tecla F1: el menú (guardar, nombre, nueva…), con el estado de la canción.
+    c.rect(150.0, 14.0, 92.0, 34.0, 8.0, PANEL_2);
+    c.rect(156.0, 19.0, 26.0, 16.0, 4.0, BORDE);
+    c.text(169.0, 27.0, Align2::CENTER_CENTER, "F1", 10.0, ACENTO);
+    c.text(188.0, 27.0, Align2::LEFT_CENTER, "Menú", 12.0, TEXTO);
+    let (estado, col) = match &extra.songs {
+        Some(sv) if sv.saved => (sv.current.chars().take(12).collect::<String>(), TEXTO_2),
+        Some(_) => ("● sin guardar".to_string(), ACENTO),
+        None => (String::new(), TEXTO_2),
+    };
+    c.text(158.0, 41.0, Align2::LEFT_CENTER, estado, 9.0, col);
 
     // LCD.
     let (x0, x1) = (250.0, 710.0);
