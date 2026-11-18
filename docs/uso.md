@@ -56,6 +56,16 @@ eligen un botón de destrozar. Los botones de colores: **gris** destroza, **rojo
 acorde pone el sonido en ese golpe de la batería (otra vez lo mismo: vuelve el golpe de serie). Para traer sonidos de fuera, déjalos en
 `Música/Mapachsynthesizer/Importar` (WAV, MP3, OGG o FLAC) y abre el taller.
 
+## Juegos (menú rojo)
+
+- **Juego de oído**: suena un acorde y hay que pulsar su tecla de color.
+- **Cópiame**: suena una serie de acordes que se iluminan, y hay que repetirla. Cada vez es más larga.
+- **Sigue la canción**: brilla la siguiente tecla de Estrellita, el Himno de la alegría, Cumpleaños
+  feliz o Martinillo. Se va al ritmo que se quiera; "↑" quiere decir la fila de arriba (`Q`…`U`).
+
+`Intro` repite y la perilla mágica o cualquier menú salen. Equivocarse nunca castiga: se vuelve a
+intentar. Los juegos dan **estrellas** ⭐ y con 10 y 25 se desbloquean dos sonidos secretos.
+
 ## Presets
 
 `F1`–`F4`: pulsar carga y mantener 1,5 s guarda sonido, efectos, tonalidad, modo y ritmo.

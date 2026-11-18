@@ -1127,13 +1127,22 @@ fn chord_buttons(c: &Canvas, st: &State) {
             && hb as usize == b
         {
             let t = (c.painter.ctx().input(|i| i.time) * 5.0).sin() as f32 * 0.5 + 0.5;
+            let grow = 8.0 + 4.0 * t;
             c.rect(
-                x - 8.0,
-                y - 8.0,
-                w + 16.0,
-                h + 16.0,
-                28.0,
-                NEON_AMARILLO.gamma_multiply(0.5 + 0.5 * t),
+                x - grow,
+                y - grow,
+                w + grow * 2.0,
+                h + grow * 2.0,
+                30.0,
+                NEON_AMARILLO.gamma_multiply(0.7 + 0.3 * t),
+            );
+            c.text(
+                x + w / 2.0,
+                y - grow - 10.0,
+                Align2::CENTER_BOTTOM,
+                "⬇",
+                22.0,
+                MENU_ROJO,
             );
         }
         c.rect(x, y, w, h, 22.0, col.gamma_multiply(0.75));
