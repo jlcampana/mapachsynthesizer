@@ -214,7 +214,7 @@ Orden de prioridad si hay que recortar: 0 → 1 → 2 → 4 → 6 → 7 → 9 �
 
 **Estado (18-11-2026):** fases 0 a 9 hechas en una primera versión. De la 10 están el aleatorio, el
 juego de oído, el modo papá con arranque automático y los paquetes `.deb`/`.rpm`. Faltan el juego de
-ritmo, las animaciones, las ideas de Rainbow mode y usar samples como golpes de batería. La guía de
+ritmo, las animaciones, las ideas de Rainbow mode. La guía de
 uso está en [uso.md](uso.md).
 
 ### Calidad

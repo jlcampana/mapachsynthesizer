@@ -1011,9 +1011,19 @@ fn chord_buttons(c: &Canvas, st: &State) {
         let cx = x + w / 2.0;
         if matches!(st.play_mode, PlayMode::Bateria | PlayMode::Secuencia) {
             let d = Drum::ALL[b];
-            c.text(cx, y + 42.0, Align2::CENTER_CENTER, d.icon(), 38.0, tc);
-            let size = if d.name().len() > 8 { 13.0 } else { 17.0 };
-            c.text(cx, y + 80.0, Align2::CENTER_CENTER, d.name(), size, tc);
+            let custom = st.drum_samples[b].as_deref().map(|p| {
+                std::path::Path::new(p)
+                    .file_stem()
+                    .map(|f| f.to_string_lossy().chars().take(10).collect::<String>())
+                    .unwrap_or_default()
+            });
+            let (icon, name) = match &custom {
+                Some(n) => ("🎤", n.as_str()),
+                None => (d.icon(), d.name()),
+            };
+            c.text(cx, y + 42.0, Align2::CENTER_CENTER, icon, 38.0, tc);
+            let size = if name.chars().count() > 8 { 13.0 } else { 17.0 };
+            c.text(cx, y + 80.0, Align2::CENTER_CENTER, name, size, tc);
         } else if st.play_mode == PlayMode::Melodia {
             c.text(cx, y + 48.0, Align2::CENTER_CENTER, "♪", 40.0, tc);
         } else if st.show_names {
@@ -1395,7 +1405,7 @@ fn taller_screen(c: &Canvas, st: &State, extra: &Extra) {
         290.0,
         362.0,
         Align2::LEFT_CENTER,
-        "¡DESTRÓZALO!  Z aplicar · C deshacer · X usar en acordes",
+        "¡DESTRÓZALO!  Z aplicar · C deshacer · X acordes · X + tecla: batería",
         17.0,
         MARRON,
     );

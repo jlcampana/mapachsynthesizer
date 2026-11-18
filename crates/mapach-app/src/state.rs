@@ -116,6 +116,8 @@ pub enum Action {
     UndoSample,
     /// Usar el sample elegido como instrumento ("Mi sample").
     UseSample,
+    /// Poner (o quitar) el sample elegido en el golpe de batería `n`.
+    DrumSample(u8),
 }
 
 /// Fila elegida en la pantalla de canciones.
@@ -293,6 +295,8 @@ pub struct State {
     pub song_focus: SongFocus,
     /// Canciones en la lista (lo dice la app al leer la carpeta).
     pub song_count: usize,
+    /// Samples puestos en cada golpe de batería (ruta).
+    pub drum_samples: [Option<String>; BUTTONS],
     /// Colores fijados en cada tecla (chord lock).
     pub locks: [Option<Direction>; BUTTONS],
     /// Juego de oído en marcha.
@@ -379,6 +383,7 @@ impl Default for State {
             song_focus: SongFocus::Card(0),
             song_count: 0,
             locks: [None; BUTTONS],
+            drum_samples: Default::default(),
             game: None,
             max_db: mapach_engine::DEFAULT_MAX_DB,
             presets: Default::default(),
@@ -544,9 +549,20 @@ impl State {
             Control::Arrow(Arrow::Right) => self.destroy_sel = wrap(self.destroy_sel, 1, buttons),
             Control::Record => self.actions.push(Action::MicToggle),
             Control::Play => self.actions.push(Action::PreviewSample),
-            // Los botones de colores: gris destroza, amarillo lo usa en los acordes, rojo deshace.
+            // Los botones de colores: gris destroza, amarillo lo usa en los acordes (al soltarlo;
+            // si mientras tanto se pulsa una tecla de acorde, va a ese golpe de batería), rojo
+            // deshace.
             Control::Menu(Menu::Tono) => self.actions.push(Action::Destroy(self.destroy_sel)),
-            Control::Menu(Menu::Sonido) => self.actions.push(Action::UseSample),
+            Control::Menu(Menu::Sonido) => {
+                self.menus_held[menu_idx(Menu::Sonido)] = true;
+                self.menu_used = false;
+            }
+            Control::Chord(b)
+                if self.menus_held[menu_idx(Menu::Sonido)] && (b as usize) < BUTTONS =>
+            {
+                self.menu_used = true;
+                self.actions.push(Action::DrumSample(b));
+            }
             Control::Menu(Menu::Modo) | Control::Undo => self.actions.push(Action::UndoSample),
             Control::Taller | Control::KnobPress(Knob::Magica) | Control::Canciones => {
                 self.screen = Screen::Tocar;
@@ -1034,6 +1050,13 @@ impl State {
     fn release_control(&mut self, c: Control, out: &mut Vec<Command>) {
         // En el taller, los menús son botones: no abren nada al soltarlos.
         if self.screen == Screen::Taller && matches!(c, Control::Menu(_)) {
+            if c == Control::Menu(Menu::Sonido) {
+                self.menus_held[menu_idx(Menu::Sonido)] = false;
+                if !self.menu_used {
+                    self.actions.push(Action::UseSample);
+                }
+                self.menu_used = false;
+            }
             return;
         }
         match c {
@@ -2058,12 +2081,19 @@ mod tests {
         // Soltar el menú no abre su página.
         assert!(s.open_menu.is_none());
         press(&mut s, Control::Menu(Menu::Sonido));
+        release(&mut s, Control::Menu(Menu::Sonido));
         press(&mut s, Control::Record);
         press(&mut s, Control::Undo);
         assert_eq!(
             s.take_actions(),
             [Action::UseSample, Action::MicToggle, Action::UndoSample]
         );
+        // X mantenido + tecla 3: al golpe 3, y al soltar X no se usa en acordes.
+        press(&mut s, Control::Menu(Menu::Sonido));
+        press(&mut s, Control::Chord(2));
+        release(&mut s, Control::Chord(2));
+        release(&mut s, Control::Menu(Menu::Sonido));
+        assert_eq!(s.take_actions(), [Action::DrumSample(2)]);
         press(&mut s, Control::Taller);
         assert_eq!(s.screen, Screen::Tocar);
     }

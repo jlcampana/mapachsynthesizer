@@ -173,6 +173,9 @@ pub const EMPTY: Pattern = [0; STEPS];
 pub struct DrumMachine {
     sample_rate: f32,
     voices: [DrumVoice; 7],
+    /// Samples que sustituyen a un golpe, con su posición y volumen (`None` = parado).
+    custom: [Option<std::sync::Arc<[f32]>>; 7],
+    custom_pos: [Option<(usize, f32)>; 7],
     kit: usize,
     pattern: Pattern,
     playing: bool,
@@ -192,6 +195,8 @@ impl DrumMachine {
             step: 0,
             countdown: 0.0,
             level: 0.6,
+            custom: Default::default(),
+            custom_pos: [None; 7],
         }
     }
 
@@ -221,13 +226,29 @@ impl DrumMachine {
         self.playing.then(|| (self.step + STEPS - 1) % STEPS)
     }
 
+    /// Pone (o quita) un sample en un golpe. Devuelve el anterior, para liberarlo fuera.
+    pub fn set_sample(
+        &mut self,
+        drum: usize,
+        data: Option<std::sync::Arc<[f32]>>,
+    ) -> Option<std::sync::Arc<[f32]>> {
+        let d = drum % 7;
+        self.custom_pos[d] = None;
+        std::mem::replace(&mut self.custom[d], data)
+    }
+
     /// Golpe en directo.
     pub fn hit(&mut self, drum: usize, velocity: f32) {
         let d = drum % 7;
         if Drum::ALL[d] == Drum::CharlesCerrado {
             self.voices[Drum::CharlesAbierto.index()].choke();
+            self.custom_pos[Drum::CharlesAbierto.index()] = None;
         }
-        self.voices[d].trigger(velocity);
+        if self.custom[d].is_some() {
+            self.custom_pos[d] = Some((0, velocity));
+        } else {
+            self.voices[d].trigger(velocity);
+        }
     }
 
     /// Avanza `n` muestras (dispara los pasos que toquen) y suma la batería al bloque estéreo.
@@ -251,6 +272,22 @@ impl DrumMachine {
                 self.countdown += 60.0 / bpm.max(1.0) as f64 / 4.0 * self.sample_rate as f64;
             }
             self.countdown -= n as f64;
+        }
+        // Golpes con sample.
+        for d in 0..7 {
+            let (Some(data), Some((pos, vel))) = (&self.custom[d], &mut self.custom_pos[d]) else {
+                continue;
+            };
+            for frame in out.chunks_exact_mut(2) {
+                let Some(&v) = data.get(*pos) else {
+                    self.custom_pos[d] = None;
+                    break;
+                };
+                let s = v * *vel * self.level;
+                frame[0] += s;
+                frame[1] += s;
+                *pos += 1;
+            }
         }
         if self.voices.iter().all(|v| !v.is_active()) {
             return;
@@ -312,6 +349,21 @@ mod tests {
             d.render(&mut buf, 120.0);
         }
         assert_eq!(d.step(), Some(7));
+    }
+
+    #[test]
+    fn un_sample_sustituye_a_un_golpe() {
+        let mut d = DrumMachine::new(48_000.0);
+        assert!(
+            d.set_sample(1, Some(std::sync::Arc::from(vec![0.5f32; 100])))
+                .is_none()
+        );
+        d.hit(1, 1.0);
+        let mut buf = vec![0.0; 400];
+        d.render(&mut buf, 120.0);
+        assert!((buf[0] - 0.3).abs() < 1e-6, "{}", buf[0]);
+        assert_eq!(buf[300], 0.0, "se acaba con el sample");
+        assert!(d.set_sample(1, None).is_some());
     }
 
     #[test]

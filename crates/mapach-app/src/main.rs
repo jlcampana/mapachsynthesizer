@@ -177,6 +177,19 @@ impl App {
             cap.fake_taller(&mut app.taller);
             app.papa = cap.demo == 14;
         }
+        // Los samples puestos en la batería.
+        let golpes = app.state.drum_samples.clone();
+        for (d, path) in golpes.iter().enumerate() {
+            if let Some(p) = path {
+                match taller::load_instrument(std::path::Path::new(p)) {
+                    Some((data, _)) => app.send_all(vec![Command::SetDrumSample {
+                        drum: d as u8,
+                        data: Some(data),
+                    }]),
+                    None => app.state.drum_samples[d] = None,
+                }
+            }
+        }
         // El sample que se usaba como instrumento.
         if let Some(path) = instrument
             && let Some((data, root)) = taller::load_instrument(&path)
@@ -244,6 +257,7 @@ impl App {
                         | Action::Destroy(_)
                         | Action::UndoSample
                         | Action::UseSample
+                        | Action::DrumSample(_)
                 )
             });
         for a in taller_actions {
@@ -382,6 +396,34 @@ impl App {
                     self.state.show_toast("No encuentro el micrófono 🎤");
                 }
             },
+            Action::DrumSample(b) => {
+                let Some((data, _, name, path)) = t.for_instrument() else {
+                    self.state.show_toast("Primero elige o graba un sonido");
+                    return;
+                };
+                let path = path.to_string_lossy().into_owned();
+                let slot = &mut self.state.drum_samples[b as usize];
+                if slot.as_deref() == Some(&path) {
+                    // Otra vez el mismo: vuelve el golpe de serie.
+                    *slot = None;
+                    link.send(Command::SetDrumSample {
+                        drum: b,
+                        data: None,
+                    });
+                    self.state
+                        .show_toast(format!("🥁 La tecla {} vuelve a su golpe", b + 1));
+                } else {
+                    *slot = Some(path);
+                    link.send(Command::SetDrumSample {
+                        drum: b,
+                        data: Some(data),
+                    });
+                    self.state.show_toast(format!(
+                        "🥁 La tecla {} de la batería suena a «{name}»",
+                        b + 1
+                    ));
+                }
+            }
             Action::UseSample => {
                 if let Some((data, root, name, path)) = t.for_instrument() {
                     link.send(Command::SetSample {

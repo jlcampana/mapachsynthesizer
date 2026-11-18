@@ -101,6 +101,11 @@ pub enum Command {
         data: std::sync::Arc<[f32]>,
         root: f32,
     },
+    /// Pone un sample en un golpe de batería (0–6). `None` vuelve al sintetizado.
+    SetDrumSample {
+        drum: u8,
+        data: Option<std::sync::Arc<[f32]>>,
+    },
     /// Escucha un sample tal cual (en el taller). `None` para.
     Preview(Option<std::sync::Arc<[f32]>>),
     /// Copia una pista del looper en el búfer (de `looper_capacity() * 2` muestras).
@@ -316,6 +321,11 @@ impl Engine {
                 }
                 if let Some(old) = self.samples[slot].replace(SampleSlot { data, root }) {
                     self.reply(Reply::FreeSample(old.data));
+                }
+            }
+            Command::SetDrumSample { drum, data } => {
+                if let Some(old) = self.drums.set_sample(drum as usize, data) {
+                    self.reply(Reply::FreeSample(old));
                 }
             }
             Command::Preview(p) => {

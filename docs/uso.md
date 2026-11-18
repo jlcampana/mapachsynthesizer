@@ -52,7 +52,8 @@ Las canciones se guardan solas y la app abre la última al arrancar. En la panta
 
 `Espacio` graba con el micro (hasta 10 s), `Intro` escucha, ↑↓ eligen sonido y ←→ (o perilla 2)
 eligen un botón de destrozar. Los botones de colores: **gris** destroza, **rojo** deshace y
-**amarillo** usa el sonido en los acordes ("Mi sample"). Para traer sonidos de fuera, déjalos en
+**amarillo** usa el sonido en los acordes ("Mi sample"). Mantener el amarillo y pulsar una tecla de
+acorde pone el sonido en ese golpe de la batería (otra vez lo mismo: vuelve el golpe de serie). Para traer sonidos de fuera, déjalos en
 `Música/Mapachsynthesizer/Importar` (WAV, MP3, OGG o FLAC) y abre el taller.
 
 ## Presets

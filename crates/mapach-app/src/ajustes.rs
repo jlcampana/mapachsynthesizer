@@ -50,6 +50,8 @@ pub struct Ajustes {
     pub volumen_maximo: f32,
     /// Color fijado en cada tecla (−1 = ninguno; si no, posición en `DIRS`).
     pub fijados: Vec<i8>,
+    /// Sample de cada golpe de batería ("" = el de serie).
+    pub golpes: Vec<String>,
 }
 
 const DIRS: [Direction; 8] = [
@@ -113,6 +115,11 @@ impl Ajustes {
                 .iter()
                 .map(|l| l.map_or(-1, |d| pos(&DIRS, &d) as i8))
                 .collect(),
+            golpes: s
+                .drum_samples
+                .iter()
+                .map(|g| g.clone().unwrap_or_default())
+                .collect(),
         }
     }
 
@@ -145,6 +152,9 @@ impl Ajustes {
             }
         }
         s.max_db = self.volumen_maximo.clamp(-24.0, -3.0);
+        for (dst, src) in s.drum_samples.iter_mut().zip(&self.golpes) {
+            *dst = (!src.is_empty()).then(|| src.clone());
+        }
         for (dst, &src) in s.locks.iter_mut().zip(&self.fijados) {
             *dst = usize::try_from(src).ok().and_then(|i| DIRS.get(i)).copied();
         }
