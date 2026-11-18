@@ -55,6 +55,11 @@ duración (si suena un ritmo, se redondea a compases). `1`–`6` eligen pista (e
 acorde 1–6), mantener una pista 1,5 s la borra y `Retroceso` deshace la última grabación. `Intro`
 para y sigue.
 
+**Silenciar un loop:** elige la pista con OK + rueda (o `1`–`6`) y, mientras se ve el looper,
+pulsa la perilla del volumen: esa pista se calla (o vuelve a sonar). Si no se ve el looper, pulsar
+el volumen silencia todo, como siempre. Al abrir la app vuelve la última canción con sus loops,
+en pausa; para empezar de cero, Mis canciones › Nueva.
+
 ## Canciones (`F5`)
 
 Las canciones se guardan solas y la app abre la última al arrancar. En la pantalla: ←→ eligen,

@@ -50,7 +50,7 @@ que es como lo hace el HiChord.
 
 | Perilla | Girar | Pulsar |
 |---|---|---|
-| **Izquierda · Volumen** | Volumen. Con Tono, Sonido o Modo pulsado: ataque, release o brillo | Silencio |
+| **Izquierda · Volumen** | Volumen. Con Tono, Sonido o Modo pulsado: ataque, release o brillo | Silencio. Con el looper a la vista: silencia la pista elegida |
 | **Centro · Tempo** | BPM (40–300). Con Tono pulsado: octava; con Sonido: cantidad de efecto; con Modo: patrón o ritmo | Tap tempo (si el mando lo manda) |
 | **Derecha, la grande · Rueda-cursor** | Ver abajo | No hace falta: **Play** hace de botón central |
 

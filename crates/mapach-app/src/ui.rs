@@ -859,12 +859,15 @@ fn mando_panel(c: &Canvas, st: &State) {
             if active { ACENTO } else { TEXTO_2 },
         );
     };
-    knob(
-        770.0,
-        12.0,
-        if st.muted { "silencio" } else { "volumen" },
-        false,
-    );
+    let loop_mute = st.looper_visible() && st.looper.has(st.track);
+    let vol_label = if loop_mute {
+        format!("🔇 pista {}", st.track + 1)
+    } else if st.muted {
+        "silencio".into()
+    } else {
+        "volumen".into()
+    };
+    knob(770.0, 12.0, &vol_label, loop_mute);
     knob(818.0, 12.0, &format!("{:.0} bpm", st.bpm), false);
     knob(890.0, 22.0, st.cursor_role(), true);
 
