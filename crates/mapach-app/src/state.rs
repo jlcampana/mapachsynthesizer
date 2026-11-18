@@ -139,25 +139,34 @@ pub enum Action {
     DrumSample(u8),
     /// Poner (o quitar) el sample elegido en el atajo `n`.
     AssignShortcut(u8),
-    /// Abrir la lista de samples para el atajo `n` (hay que leer la carpeta).
-    OpenPicker(u8),
+    /// Abrir la lista de samples (hay que leer la carpeta).
+    OpenPicker(PickTarget),
     /// Escuchar el sample `n` de la lista.
     PreviewPick(usize),
     /// Marcar o desmarcar como favorito el sample `n` de la lista.
     ToggleFavorite(usize),
-    /// Poner el sample `pick` de la lista en el atajo `shortcut`.
+    /// Poner el sample `pick` de la lista en su sitio.
     AssignPick {
-        shortcut: u8,
+        target: PickTarget,
         pick: usize,
     },
     /// Cerrar la lista (deja de sonar).
     ClosePicker,
 }
 
-/// Lista de samples para elegir el de un atajo.
+/// Para qué se elige un sample de la lista.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PickTarget {
+    /// El atajo 0–3.
+    Atajo(u8),
+    /// El instrumento "Mi sample" (el sample tocado como notas).
+    Instrumento,
+}
+
+/// Lista de samples para elegir el de un atajo o el del instrumento.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Picker {
-    pub shortcut: u8,
+    pub target: PickTarget,
     pub sel: usize,
 }
 
@@ -221,6 +230,8 @@ pub enum Item {
     Efecto,
     Cantidad,
     Sala,
+    /// Sample que se toca como notas ("Mi sample"): abre la lista.
+    Sample,
     /// Empieza el juego de oído.
     Juego,
     /// Empieza *Cópiame*.
@@ -244,6 +255,7 @@ impl Item {
             ],
             Menu::Sonido => &[
                 Item::Sonido,
+                Item::Sample,
                 Item::Efecto,
                 Item::Cantidad,
                 Item::Sala,
@@ -291,6 +303,7 @@ impl Item {
             Item::Efecto => "Efecto",
             Item::Cantidad => "Cantidad",
             Item::Sala => "Sala",
+            Item::Sample => "Sample como notas",
             Item::Juego => "Juego de oído",
             Item::Copiame => "Cópiame",
             Item::Sigue => "Sigue la canción",
@@ -1022,6 +1035,24 @@ impl State {
         out
     }
 
+    /// Abre la lista de samples.
+    fn open_picker(&mut self, target: PickTarget) {
+        self.open_menu = None;
+        self.menu_edit = false;
+        self.picker = Some(Picker { target, sel: 0 });
+        self.actions.push(Action::OpenPicker(target));
+    }
+
+    /// OK (o pulsar la rueda) en la página de un menú: en "Sample" abre la lista; en lo demás,
+    /// entra o sale de cambiar el valor.
+    fn menu_ok(&mut self) {
+        if self.selected_item() == Some(Item::Sample) {
+            self.open_picker(PickTarget::Instrumento);
+        } else {
+            self.menu_edit = !self.menu_edit;
+        }
+    }
+
     /// Controles con la lista de samples abierta. Devuelve `true` si el control se ha usado.
     fn picker_press(&mut self, c: Control, out: &mut Vec<Command>) -> bool {
         let Some(p) = self.picker else { return false };
@@ -1030,7 +1061,7 @@ impl State {
             Control::Play => {
                 if self.picker_count > 0 {
                     self.actions.push(Action::AssignPick {
-                        shortcut: p.shortcut,
+                        target: p.target,
                         pick: p.sel,
                     });
                 }
@@ -1074,11 +1105,7 @@ impl State {
         if let Some(i) = self.shortcut_held.iter().position(|&h| h) {
             match c {
                 Control::Play => {
-                    self.picker = Some(Picker {
-                        shortcut: i as u8,
-                        sel: 0,
-                    });
-                    self.actions.push(Action::OpenPicker(i as u8));
+                    self.open_picker(PickTarget::Atajo(i as u8));
                     return;
                 }
                 Control::KnobPress(Knob::Tempo) => {
@@ -1282,8 +1309,7 @@ impl State {
                     self.menu_used = true;
                     self.randomize(m, out);
                 } else if self.open_menu.is_some() {
-                    // Entrar o salir de cambiar el valor de la opción.
-                    self.menu_edit = !self.menu_edit;
+                    self.menu_ok();
                 } else if let Some(sounding) = &self.current {
                     // Con un acorde pulsado: fijar su color en esa tecla (o soltarlo).
                     let b = sounding.button as usize;
@@ -1329,7 +1355,7 @@ impl State {
             // Play actúa al soltarlo, por si mientras tanto se gira la rueda (elegir pista).
             // Con un menú abierto, Play es el botón central del iPod: entra y sale de cambiar
             // el valor (las ruedas del mando no siempre se pueden pulsar).
-            Control::Play if self.open_menu.is_some() => self.menu_edit = !self.menu_edit,
+            Control::Play if self.open_menu.is_some() => self.menu_ok(),
             Control::Play => self.play_held = Some(false),
             _ => {}
         }
@@ -1685,6 +1711,7 @@ impl State {
                 self.reverb = (self.reverb + d as f32 * 0.05).clamp(0.0, 1.0);
                 out.push(Command::SetReverb(self.reverb));
             }
+            Item::Sample => self.open_picker(PickTarget::Instrumento),
             Item::Juego => self.start_game(out),
             Item::Copiame => self.start_simon(out),
             Item::Sigue => self.start_follow(out),
@@ -2049,7 +2076,9 @@ mod tests {
         let c = press(&mut s, Control::Arrow(Arrow::Right));
         assert_eq!(s.sound, 1);
         assert!(matches!(c[0], Command::SetPatch(_)));
-        // Abajo: siguiente opción.
+        // Abajo: siguiente opción (el sample como notas, luego el efecto).
+        press(&mut s, Control::Arrow(Arrow::Down));
+        assert_eq!(s.selected_item(), Some(Item::Sample));
         press(&mut s, Control::Arrow(Arrow::Down));
         assert_eq!(s.selected_item(), Some(Item::Efecto));
         // Volver a pulsar el menú lo cierra.
@@ -2416,7 +2445,7 @@ mod tests {
         press(&mut s, Control::Menu(Menu::Sonido));
         release(&mut s, Control::Menu(Menu::Sonido));
         // Girar mueve el cursor, sin cambiar nada.
-        let c = s.handle(Event::Turn(Knob::Cursor, 1), 0.0);
+        let c = s.handle(Event::Turn(Knob::Cursor, 2), 0.0);
         assert!(c.is_empty());
         assert_eq!(s.selected_item(), Some(Item::Efecto));
         // Play (o pulsar la rueda) entra a cambiar el valor; girar lo cambia.
@@ -2427,7 +2456,7 @@ mod tests {
         assert_eq!(s.effect, Effect::Eco);
         // Pulsar otra vez vuelve a mover el cursor.
         press(&mut s, Control::KnobPress(Knob::Cursor));
-        s.handle(Event::Turn(Knob::Cursor, -1), 0.0);
+        s.handle(Event::Turn(Knob::Cursor, -2), 0.0);
         assert_eq!(s.selected_item(), Some(Item::Sonido));
         assert_eq!(s.effect, Effect::Eco);
         // Mantener Modo + rueda: cambia el modo.
@@ -2602,7 +2631,7 @@ mod tests {
         press(&mut s, Control::Play);
         release(&mut s, Control::Play);
         release(&mut s, Control::Pad(10));
-        assert_eq!(s.take_actions(), [Action::OpenPicker(1)]);
+        assert_eq!(s.take_actions(), [Action::OpenPicker(PickTarget::Atajo(1))]);
         s.picker_count = 3;
         // La rueda recorre la lista y da la vuelta.
         s.handle(Event::Turn(Knob::Cursor, -1), 0.0);
@@ -2622,7 +2651,7 @@ mod tests {
             s.take_actions(),
             [
                 Action::AssignPick {
-                    shortcut: 1,
+                    target: PickTarget::Atajo(1),
                     pick: 0
                 },
                 Action::ClosePicker
@@ -2631,6 +2660,34 @@ mod tests {
         assert!(s.picker.is_none());
         // Soltar OK no hace play.
         assert!(release(&mut s, Control::Play).is_empty());
+    }
+
+    #[test]
+    fn sample_como_notas_desde_el_menu_amarillo() {
+        let mut s = State::default();
+        press(&mut s, Control::Menu(Menu::Sonido));
+        release(&mut s, Control::Menu(Menu::Sonido));
+        s.handle(Event::Turn(Knob::Cursor, 1), 0.0);
+        assert_eq!(s.selected_item(), Some(Item::Sample));
+        press(&mut s, Control::Play);
+        assert_eq!(
+            s.take_actions(),
+            [Action::OpenPicker(PickTarget::Instrumento)]
+        );
+        assert!(s.open_menu.is_none());
+        s.picker_count = 2;
+        release(&mut s, Control::Play);
+        press(&mut s, Control::Play);
+        assert_eq!(
+            s.take_actions(),
+            [
+                Action::AssignPick {
+                    target: PickTarget::Instrumento,
+                    pick: 0
+                },
+                Action::ClosePicker
+            ]
+        );
     }
 
     #[test]

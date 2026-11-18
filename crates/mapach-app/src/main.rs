@@ -534,18 +534,34 @@ impl App {
                     });
                 }
             }
-            Action::AssignPick { shortcut, pick } => match t.load_pick(pick) {
-                Some((data, name, path)) => {
+            Action::AssignPick { target, pick } => match (target, t.load_pick(pick)) {
+                (state::PickTarget::Atajo(i), Some((data, name, path))) => {
                     link.send(Command::SetShortcut {
-                        slot: shortcut,
+                        slot: i,
                         data: Some(data),
                     });
-                    self.state.shortcuts[shortcut as usize] =
-                        Some(path.to_string_lossy().into_owned());
+                    self.state.shortcuts[i as usize] = Some(path.to_string_lossy().into_owned());
                     self.state
-                        .show_toast(format!("⚡ El atajo {} suena a «{name}»", shortcut + 1));
+                        .show_toast(format!("⚡ El atajo {} suena a «{name}»", i + 1));
                 }
-                None => self.state.show_toast("Ese fichero no se puede leer 😕"),
+                (state::PickTarget::Instrumento, Some((data, name, path))) => {
+                    // Se afina según su nota (si no tiene, como un Do).
+                    let root = mapach_samples::pitch::root_note(&data);
+                    link.send(Command::SetSample {
+                        slot: 0,
+                        data,
+                        root,
+                    });
+                    for c in self
+                        .state
+                        .use_instrument(path.to_string_lossy().into_owned())
+                    {
+                        link.send(c);
+                    }
+                    self.state
+                        .show_toast(format!("🎤 Tus teclas suenan a «{name}»"));
+                }
+                (_, None) => self.state.show_toast("Ese fichero no se puede leer 😕"),
             },
             Action::ClosePicker => t.stop_preview(link),
             Action::UseSample => {

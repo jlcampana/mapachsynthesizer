@@ -832,6 +832,12 @@ fn value_text(st: &State, item: Item) -> String {
         Item::Cantidad => format!("{:.0} %", st.effect_amount * 100.0),
         Item::Sala => format!("{:.0} %", st.reverb * 100.0),
         Item::Juego | Item::Copiame | Item::Sigue => "▶".to_string(),
+        Item::Sample => st
+            .instrument
+            .as_deref()
+            .and_then(|p| std::path::Path::new(p).file_stem())
+            .map(|f| format!("{} · OK", f.to_string_lossy()))
+            .unwrap_or_else(|| "ninguno · OK para elegir".to_string()),
     }
 }
 
@@ -1001,7 +1007,10 @@ fn picker_view(
         254.0,
         106.0,
         Align2::CENTER_CENTER,
-        format!("⚡ Atajo {}", p.shortcut + 1),
+        match p.target {
+            crate::state::PickTarget::Atajo(i) => format!("⚡ Atajo {}", i + 1),
+            crate::state::PickTarget::Instrumento => "🎤 Como notas".to_string(),
+        },
         16.0,
         TEXTO,
     );

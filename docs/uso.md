@@ -95,6 +95,15 @@ acorde pone el sonido en ese golpe de la batería (otra vez lo mismo: vuelve el 
 Play (`Intro`) repite y cualquier botón de color sale. Equivocarse nunca castiga: se vuelve a
 intentar. Los juegos dan **estrellas** ⭐ y con 10 y 25 se desbloquean dos sonidos secretos.
 
+## Samples como notas
+
+En el menú amarillo (Sonido), la opción **"Sample como notas"** abre la lista de samples (la misma
+que la de los atajos: rueda para elegir, perilla central para ★ favoritos, OK para ponerlo). El
+sample elegido pasa a ser el sonido "Mi sample": cada tecla lo toca más agudo o más grave, como un
+instrumento, en acordes, Melodía, Arpegio… La app detecta su nota para afinarlo; si no tiene nota
+(un golpe, un aplauso), lo toma como un Do. Los que mejor suenan como notas son los que tienen una
+nota clara y larga, como el diapasón o la trompeta.
+
 ## Atajos a samples
 
 La fila 3 del mando (en el teclado, `V N M ,`) son 4 atajos: cada uno dispara un sample entero, que
